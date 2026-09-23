@@ -1,0 +1,22 @@
+# Build and test outputs
+bin/
+dist/
+coverage.out
+*.test
+*.prof
+
+# Local runtime data
+tmp/
+*.log
+*.pid
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

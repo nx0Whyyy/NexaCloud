@@ -1,0 +1,30 @@
+FROM golang:1.23-alpine AS builder
+
+ARG SERVICE
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+
+WORKDIR /workspace
+
+COPY go.work go.work
+COPY pkg/model/go.mod pkg/model/
+COPY pkg/model/*.go pkg/model/
+
+COPY services/${SERVICE}/go.mod services/${SERVICE}/
+RUN cd services/${SERVICE} && go mod download 2>/dev/null || true
+
+COPY services/${SERVICE}/ ./services/${SERVICE}/
+RUN cd services/${SERVICE}/../${SERVICE} && CGO_ENABLED=0 go build -ldflags "-X main.version=${VERSION} -X main.commit=${GIT_COMMIT}" -o /${SERVICE} ./cmd/
+
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates curl
+
+WORKDIR /app
+
+COPY --from=builder /${SERVICE} /usr/local/bin/${SERVICE}
+
+EXPOSE 8080
+
+ENTRYPOINT ["orchestrator"]
+CMD ["--help"]

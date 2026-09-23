@@ -1,0 +1,23 @@
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /workspace
+
+COPY go.work go.work
+COPY pkg/model/go.mod pkg/model/
+COPY pkg/model/*.go pkg/model/
+
+COPY agent/go.mod agent/
+RUN cd agent && go mod download 2>/dev/null || true
+
+COPY agent/ ./agent/
+RUN cd agent && CGO_ENABLED=0 go build -o /nexa-agent ./cmd/
+
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates docker-cli
+
+WORKDIR /app
+
+COPY --from=builder /nexa-agent /usr/local/bin/nexa-agent
+
+ENTRYPOINT ["nexa-agent"]

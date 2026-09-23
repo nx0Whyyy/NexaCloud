@@ -1,0 +1,14 @@
+go 1.23
+
+use (
+	./pkg/model
+	./services/orchestrator
+	./services/scheduler
+	./services/registry
+	./services/autoscaler
+	./services/deployment
+	./services/backup
+	./services/monitoring
+	./agent
+	./cli
+)
