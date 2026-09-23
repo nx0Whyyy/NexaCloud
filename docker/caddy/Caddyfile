@@ -1,0 +1,29 @@
+{
+	email {$ACME_EMAIL}
+}
+
+cloud.nexastudio.dev {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	@registry path /api/v1/services /api/v1/routing
+	handle @registry {
+		reverse_proxy registry:8081
+	}
+
+	handle {
+		reverse_proxy orchestrator:8080
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -6,15 +6,13 @@ ARG GIT_COMMIT=unknown
 
 WORKDIR /workspace
 
-COPY go.work go.work
-COPY pkg/model/go.mod pkg/model/
-COPY pkg/model/*.go pkg/model/
-
-COPY services/${SERVICE}/go.mod services/${SERVICE}/
-RUN cd services/${SERVICE} && go mod download 2>/dev/null || true
-
+COPY pkg/model/ ./pkg/model/
 COPY services/${SERVICE}/ ./services/${SERVICE}/
-RUN cd services/${SERVICE}/../${SERVICE} && CGO_ENABLED=0 go build -ldflags "-X main.version=${VERSION} -X main.commit=${GIT_COMMIT}" -o /${SERVICE} ./cmd/
+WORKDIR /workspace/services/${SERVICE}
+RUN GOWORK=off go mod download && \
+    CGO_ENABLED=0 GOWORK=off go build \
+      -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${GIT_COMMIT}" \
+      -o /nexacloud-service ./cmd/
 
 FROM alpine:3.20
 
@@ -22,9 +20,10 @@ RUN apk add --no-cache ca-certificates curl
 
 WORKDIR /app
 
-COPY --from=builder /${SERVICE} /usr/local/bin/${SERVICE}
+COPY --from=builder /nexacloud-service /usr/local/bin/nexacloud-service
+
+USER 10001:10001
 
 EXPOSE 8080
 
-ENTRYPOINT ["orchestrator"]
-CMD ["--help"]
+ENTRYPOINT ["nexacloud-service"]

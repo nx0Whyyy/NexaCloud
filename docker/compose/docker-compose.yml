@@ -1,4 +1,4 @@
-version: "3.8"
+name: nexacloud
 
 services:
   postgres:
@@ -6,40 +6,43 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: nexacloud
-      POSTGRES_PASSWORD: nexacloud
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: nexacloud
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ../postgres/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-    ports:
-      - "5432:5432"
+      - ../postgres/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nexacloud"]
+      test: ["CMD-SHELL", "pg_isready -U nexacloud -d nexacloud"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    networks: [backend]
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
-    ports:
-      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
 
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
-    command: ["nats-server", "--jetstream", "-m", "8222"]
-    ports:
-      - "4222:4222"
-      - "8222:8222"
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222"]
+    volumes:
+      - natsdata:/data
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8222/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
 
   orchestrator:
     build:
@@ -52,15 +55,20 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       nats:
         condition: service_healthy
     environment:
-      - DB_HOST=postgres
-      - REDIS_HOST=redis
-      - NATS_URL=nats://nats:4222
-    ports:
-      - "8080:8080"
+      DB_HOST: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      NATS_URL: nats://nats:4222
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
 
   scheduler:
     build:
@@ -70,12 +78,11 @@ services:
         SERVICE: scheduler
     restart: unless-stopped
     depends_on:
-      orchestrator:
-        condition: service_started
+      nats:
+        condition: service_healthy
     environment:
-      - DB_HOST=postgres
-      - REDIS_HOST=redis
-      - NATS_URL=nats://nats:4222
+      NATS_URL: nats://nats:4222
+    networks: [backend]
 
   registry:
     build:
@@ -85,13 +92,52 @@ services:
         SERVICE: registry
     restart: unless-stopped
     depends_on:
-      orchestrator:
-        condition: service_started
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
     environment:
-      - DB_HOST=postgres
-      - REDIS_HOST=redis
-      - NATS_URL=nats://nats:4222
+      API_PORT: 8081
+      DB_HOST: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      NATS_URL: nats://nats:4222
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/api/v1/services"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-admin@nexastudio.dev}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    networks:
+      - edge
+      - backend
+
+networks:
+  edge:
+  backend:
+    internal: true
 
 volumes:
   pgdata:
   redisdata:
+  natsdata:
+  caddydata:
+  caddyconfig:
