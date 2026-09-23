@@ -9,7 +9,7 @@ WORKDIR /workspace
 COPY pkg/model/ ./pkg/model/
 COPY services/${SERVICE}/ ./services/${SERVICE}/
 WORKDIR /workspace/services/${SERVICE}
-RUN GOWORK=off go mod download && \
+RUN GOWORK=off go mod tidy && \
     CGO_ENABLED=0 GOWORK=off go build \
       -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${GIT_COMMIT}" \
       -o /nexacloud-service ./cmd/
