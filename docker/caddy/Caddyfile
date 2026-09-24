@@ -28,3 +28,34 @@ cloud.nexastudio.dev {
 		format console
 	}
 }
+
+(public_security) {
+	header {
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}
+
+status.nexastudio.dev {
+	encode zstd gzip
+	import public_security
+	reverse_proxy monitoring:8082
+	log {
+		output stdout
+		format console
+	}
+}
+
+changelog.nexastudio.dev {
+	encode zstd gzip
+	import public_security
+	reverse_proxy monitoring:8082
+	log {
+		output stdout
+		format console
+	}
+}

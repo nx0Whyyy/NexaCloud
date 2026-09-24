@@ -1,6 +1,9 @@
 # Build and test outputs
 bin/
 dist/
+node_modules/
+!services/monitoring/internal/server/web/dist/
+!services/monitoring/internal/server/web/dist/**
 coverage.out
 *.test
 *.prof

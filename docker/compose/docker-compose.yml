@@ -111,6 +111,41 @@ services:
       retries: 10
     networks: [backend]
 
+  monitoring:
+    build:
+      context: ../../
+      dockerfile: docker/Dockerfile.service
+      args:
+        SERVICE: monitoring
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+    environment:
+      API_PORT: 8082
+      DB_HOST: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      ORCHESTRATOR_URL: http://orchestrator:8080/healthz
+      REGISTRY_URL: http://registry:8081/api/v1/services
+      REDIS_ADDRESS: redis:6379
+      NATS_ADDRESS: nats:4222
+      GITHUB_REPOSITORY: nx0Whyyy/NexaCloud
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -118,6 +153,8 @@ services:
       orchestrator:
         condition: service_healthy
       registry:
+        condition: service_healthy
+      monitoring:
         condition: service_healthy
     environment:
       ACME_EMAIL: ${ACME_EMAIL:-admin@nexastudio.dev}

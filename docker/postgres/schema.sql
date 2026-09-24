@@ -185,6 +185,27 @@ CREATE TABLE user_sessions (
 );
 
 -- ------------------------------------------------------------------
+-- Public status history and incidents
+-- ------------------------------------------------------------------
+CREATE TABLE snapshots (
+    id              BIGSERIAL PRIMARY KEY,
+    component       TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    latency_ms      BIGINT NOT NULL DEFAULT 0,
+    checked_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE incidents (
+    id              BIGSERIAL PRIMARY KEY,
+    component       TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at     TIMESTAMPTZ,
+    last_message    TEXT
+);
+
+-- ------------------------------------------------------------------
 -- Indexes
 -- ------------------------------------------------------------------
 CREATE INDEX idx_instances_service ON instances(service_name);
@@ -197,3 +218,7 @@ CREATE INDEX idx_audit_time        ON audit_log(created_at DESC);
 CREATE INDEX idx_configs_scope     ON configs(scope, path);
 CREATE INDEX idx_user_sessions_user ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_expiry ON user_sessions(expires_at);
+CREATE INDEX idx_snapshots_component ON snapshots(component);
+CREATE INDEX idx_snapshots_checked_at ON snapshots(checked_at DESC);
+CREATE INDEX idx_incidents_component ON incidents(component);
+CREATE INDEX idx_incidents_status ON incidents(status);
