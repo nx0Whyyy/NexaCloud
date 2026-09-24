@@ -177,6 +177,90 @@ CREATE TABLE users (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ------------------------------------------------------------------
+-- Tenancy, subscriptions and server-side entitlements
+-- ------------------------------------------------------------------
+CREATE TABLE organizations (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        TEXT NOT NULL,
+    slug        TEXT UNIQUE NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE organization_members (
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role            TEXT NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (organization_id, user_id)
+);
+
+CREATE TABLE plans (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code                TEXT UNIQUE NOT NULL,
+    name                TEXT NOT NULL,
+    price_monthly       BIGINT NOT NULL DEFAULT 0,
+    active              BOOLEAN NOT NULL DEFAULT true,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE plan_entitlements (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plan_id     UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+    key         TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (plan_id, key)
+);
+
+CREATE TABLE subscriptions (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id     UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    plan_id             UUID NOT NULL REFERENCES plans(id),
+    status              TEXT NOT NULL,
+    entitlement_data    JSONB NOT NULL,
+    current_period_ends TIMESTAMPTZ,
+    grace_ends_at       TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE licenses (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id     UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    key_prefix          TEXT NOT NULL,
+    key_hash            TEXT UNIQUE NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'ACTIVE',
+    last_used_at        TIMESTAMPTZ,
+    expires_at          TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    revoked_at          TIMESTAMPTZ
+);
+
+CREATE TABLE networks (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id     UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    name                TEXT NOT NULL,
+    status              TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (organization_id, name)
+);
+
+CREATE TABLE instance_slots (
+    instance_id         UUID PRIMARY KEY REFERENCES instances(id) ON DELETE CASCADE,
+    organization_id     UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    reserved_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE nodes ADD COLUMN organization_id UUID REFERENCES organizations(id);
+ALTER TABLE nodes ADD COLUMN network_id UUID REFERENCES networks(id);
+ALTER TABLE instances ADD COLUMN organization_id UUID REFERENCES organizations(id);
+ALTER TABLE instances ADD COLUMN network_id UUID REFERENCES networks(id);
+
 CREATE TABLE user_sessions (
     token_hash      TEXT PRIMARY KEY,
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -218,6 +302,10 @@ CREATE INDEX idx_audit_time        ON audit_log(created_at DESC);
 CREATE INDEX idx_configs_scope     ON configs(scope, path);
 CREATE INDEX idx_user_sessions_user ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_expiry ON user_sessions(expires_at);
+CREATE INDEX idx_organization_members_user ON organization_members(user_id);
+CREATE INDEX idx_licenses_organization ON licenses(organization_id);
+CREATE INDEX idx_networks_organization ON networks(organization_id);
+CREATE INDEX idx_instance_slots_organization ON instance_slots(organization_id);
 CREATE INDEX idx_snapshots_component ON snapshots(component);
 CREATE INDEX idx_snapshots_checked_at ON snapshots(checked_at DESC);
 CREATE INDEX idx_incidents_component ON incidents(component);

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nexastudio/nexacloud/services/orchestrator/internal/access"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/auth"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/config"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/crashloop"
@@ -38,6 +39,7 @@ type Orchestrator struct {
 	shift     *shift.Shifter
 	crashloop *crashloop.Detector
 	auth      *auth.Service
+	access    *access.Service
 
 	wg     sync.WaitGroup
 	mux    *http.ServeMux
@@ -81,7 +83,8 @@ func New(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*Orchest
 	o.lifecycle = lifecycle.New(db, nc, logger)
 	o.shift = shift.New(db, nc, logger)
 	o.crashloop = crashloop.New(db, logger)
-	o.auth = auth.New(db)
+	o.access = access.New(db)
+	o.auth = auth.New(db, o.access.ProvisionUser)
 
 	if err := o.migrate(); err != nil {
 		return nil, err
@@ -127,6 +130,7 @@ func (o *Orchestrator) setupRoutes() {
 	o.mux.HandleFunc("/api/v1/platform", o.handlePlatform)
 	if o.auth != nil {
 		o.auth.RegisterRoutes(o.mux)
+		o.access.RegisterRoutes(o.mux, o.auth.CurrentUser)
 	}
 	o.mux.HandleFunc("GET /platform", o.servePage("platform.html"))
 	o.mux.HandleFunc("GET /infrastructure", o.servePage("infrastructure.html"))
@@ -139,7 +143,10 @@ func (o *Orchestrator) setupRoutes() {
 }
 
 func (o *Orchestrator) migrate() error {
-	return o.auth.Migrate()
+	if err := o.auth.Migrate(); err != nil {
+		return err
+	}
+	return o.access.Migrate()
 }
 
 func (o *Orchestrator) servePage(name string) http.HandlerFunc {

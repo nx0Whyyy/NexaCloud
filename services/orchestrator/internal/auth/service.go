@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/nexastudio/nexacloud/pkg/model"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -23,7 +22,12 @@ const (
 
 var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,32}$`)
 
-type Service struct{ db *gorm.DB }
+type Provisioner func(*gorm.DB, *model.User) error
+
+type Service struct {
+	db        *gorm.DB
+	provision Provisioner
+}
 
 type credentials struct {
 	Username string `json:"username"`
@@ -31,7 +35,9 @@ type credentials struct {
 	Password string `json:"password"`
 }
 
-func New(db *gorm.DB) *Service { return &Service{db: db} }
+func New(db *gorm.DB, provision Provisioner) *Service {
+	return &Service{db: db, provision: provision}
+}
 
 func (s *Service) Migrate() error {
 	return s.db.AutoMigrate(&model.User{}, &model.UserSession{})
@@ -45,15 +51,24 @@ func (s *Service) EnsureAdmin(username, email, password string) error {
 	if err := s.db.Model(&model.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil || count > 0 {
 		return err
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := hashPassword(password)
 	if err != nil {
 		return err
 	}
 	now := model.Now()
-	return s.db.Create(&model.User{
+	user := model.User{
 		ID: model.NewID(), Username: username, Email: strings.ToLower(email),
-		PasswordHash: string(hash), Role: "admin", CreatedAt: now, UpdatedAt: now,
-	}).Error
+		PasswordHash: hash, Role: "admin", CreatedAt: now, UpdatedAt: now,
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		if s.provision != nil {
+			return s.provision(tx, &user)
+		}
+		return nil
+	})
 }
 
 func (s *Service) RegisterRoutes(mux *http.ServeMux) {
@@ -81,13 +96,21 @@ func (s *Service) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "identifiants invalides")
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	hash, err := hashPassword(input.Password)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "inscription impossible")
 		return
 	}
-	user := model.User{ID: model.NewID(), Username: input.Username, Email: input.Email, PasswordHash: string(hash), Role: "user", CreatedAt: model.Now(), UpdatedAt: model.Now()}
-	if err := s.db.Create(&user).Error; err != nil {
+	user := model.User{ID: model.NewID(), Username: input.Username, Email: input.Email, PasswordHash: hash, Role: "user", CreatedAt: model.Now(), UpdatedAt: model.Now()}
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&user).Error; err != nil {
+			return err
+		}
+		if s.provision != nil {
+			return s.provision(tx, &user)
+		}
+		return nil
+	}); err != nil {
 		writeError(w, http.StatusConflict, "email ou pseudo déjà utilisé")
 		return
 	}
@@ -113,9 +136,19 @@ func (s *Service) login(w http.ResponseWriter, r *http.Request) {
 		identifier = strings.ToLower(strings.TrimSpace(input.Username))
 	}
 	var user model.User
-	if err := s.db.Where("LOWER(email) = ? OR LOWER(username) = ?", identifier, identifier).First(&user).Error; err != nil || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)) != nil {
+	if err := s.db.Where("LOWER(email) = ? OR LOWER(username) = ?", identifier, identifier).First(&user).Error; err != nil {
 		writeError(w, http.StatusUnauthorized, "identifiants incorrects")
 		return
+	}
+	valid, legacy := verifyPassword(user.PasswordHash, input.Password)
+	if !valid {
+		writeError(w, http.StatusUnauthorized, "identifiants incorrects")
+		return
+	}
+	if legacy {
+		if hash, err := hashPassword(input.Password); err == nil {
+			s.db.Model(&user).Update("password_hash", hash)
+		}
 	}
 	if err := s.startSession(w, &user); err != nil {
 		writeError(w, http.StatusInternalServerError, "session impossible")
@@ -195,6 +228,10 @@ func (s *Service) currentUser(r *http.Request) (*model.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (s *Service) CurrentUser(r *http.Request) (*model.User, error) {
+	return s.currentUser(r)
 }
 
 func (s *Service) startSession(w http.ResponseWriter, user *model.User) error {
