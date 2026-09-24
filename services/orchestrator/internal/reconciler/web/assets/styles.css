@@ -168,11 +168,13 @@ footer > span { justify-self: end; }
   footer > span { justify-self: start; }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 600px) {
   .site-header { grid-template-columns: 1fr; }
   .header-cta { display: none; }
   .hero { min-height: 780px; padding-top: 132px; }
+  h1 { font-size: 58px; }
   .hero-lead { font-size: 27px; }
+  .hero-copy { max-width: 350px; }
   .hero-actions { display: grid; grid-template-columns: 1fr; width: min(100%, 270px); }
   .button { width: 100%; }
   .hero-meta div:first-child { padding-top: 20px; padding-bottom: 20px; }
