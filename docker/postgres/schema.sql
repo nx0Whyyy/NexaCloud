@@ -174,6 +174,8 @@ CREATE TABLE users (
     email           TEXT UNIQUE NOT NULL,
     password_hash   TEXT NOT NULL,
     role            TEXT NOT NULL DEFAULT 'user',
+    email_verified_at TIMESTAMPTZ,
+    disabled_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -298,6 +300,13 @@ CREATE TABLE user_sessions (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE email_verifications (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ------------------------------------------------------------------
 -- Public status history and incidents
 -- ------------------------------------------------------------------
@@ -332,6 +341,8 @@ CREATE INDEX idx_audit_time        ON audit_log(created_at DESC);
 CREATE INDEX idx_configs_scope     ON configs(scope, path);
 CREATE INDEX idx_user_sessions_user ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_expiry ON user_sessions(expires_at);
+CREATE INDEX idx_email_verifications_user ON email_verifications(user_id);
+CREATE INDEX idx_email_verifications_expiry ON email_verifications(expires_at);
 CREATE INDEX idx_organization_members_user ON organization_members(user_id);
 CREATE INDEX idx_licenses_organization ON licenses(organization_id);
 CREATE INDEX idx_networks_organization ON networks(organization_id);

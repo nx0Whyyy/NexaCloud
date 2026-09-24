@@ -1,6 +1,6 @@
 module github.com/nexastudio/nexacloud/services/monitoring
 
-go 1.23
+go 1.25
 
 require (
 	gorm.io/driver/postgres v1.5.11

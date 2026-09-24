@@ -19,6 +19,13 @@ type Config struct {
 	AdminUsername     string
 	AdminEmail        string
 	AdminPassword     string
+	SMTPHost          string
+	SMTPPort          int
+	SMTPUsername      string
+	SMTPPassword      string
+	SMTPFrom          string
+	SMTPFromName      string
+	PublicURL         string
 	ReconcileInterval time.Duration
 }
 
@@ -36,6 +43,13 @@ func Load() (*Config, error) {
 		AdminUsername:     getEnv("NEXA_ADMIN_USERNAME", ""),
 		AdminEmail:        getEnv("NEXA_ADMIN_EMAIL", ""),
 		AdminPassword:     getEnv("NEXA_ADMIN_PASSWORD", ""),
+		SMTPHost:          getEnv("SMTP_HOST", ""),
+		SMTPPort:          getEnvInt("SMTP_PORT", 587),
+		SMTPUsername:      getEnv("SMTP_USERNAME", ""),
+		SMTPPassword:      getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:          getEnv("SMTP_FROM", "no-reply@nexastudio.dev"),
+		SMTPFromName:      getEnv("SMTP_FROM_NAME", "NexaCloud"),
+		PublicURL:         getEnv("PUBLIC_URL", "https://cloud.nexastudio.dev"),
 		ReconcileInterval: getEnvDuration("RECONCILE_INTERVAL", 5*time.Second),
 	}
 	return c, nil

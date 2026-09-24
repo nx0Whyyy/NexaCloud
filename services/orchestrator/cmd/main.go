@@ -44,8 +44,13 @@ func main() {
 	}()
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.APIPort),
-		Handler: orc.HandleAPI(),
+		Addr:              fmt.Sprintf(":%d", cfg.APIPort),
+		Handler:           orc.HandleAPI(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	go func() {

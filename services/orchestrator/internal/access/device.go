@@ -20,6 +20,10 @@ import (
 const deviceCodeLifetime = 10 * time.Minute
 
 func (s *Service) createDeviceCode(w http.ResponseWriter, r *http.Request) {
+	if !s.deviceLimit.allow("code:" + clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "device code rate limit reached")
+		return
+	}
 	var input struct {
 		Name      string          `json:"name"`
 		PublicKey string          `json:"public_key"`
@@ -56,8 +60,16 @@ func (s *Service) createDeviceCode(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) approveDeviceEnrollment(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validMutationOrigin(r) {
+			writeError(w, http.StatusForbidden, "origine refusée")
+			return
+		}
 		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
+			return
+		}
+		if !s.deviceLimit.allow("approve:" + user.ID.String()) {
+			writeError(w, http.StatusTooManyRequests, "activation rate limit reached")
 			return
 		}
 		if role != "owner" && role != "admin" && role != "infrastructure_admin" {
@@ -114,7 +126,7 @@ func (s *Service) approveDeviceEnrollment(resolve UserResolver) http.HandlerFunc
 			return tx.Create(&model.AuditEntry{ID: model.NewID(), OrganizationID: &org.ID, Actor: user.ID.String(), Action: "NODE_ENROLL", ResourceType: "node", ResourceID: node.ID.String(), IPAddress: clientIP(r), Result: "success", Details: model.JSON(map[string]any{"network_id": network.ID}), CreatedAt: now}).Error
 		})
 		if err != nil {
-			writeError(w, http.StatusConflict, err.Error())
+			writeError(w, http.StatusConflict, safeAccessError(err))
 			return
 		}
 		writeJSON(w, http.StatusCreated, node)
@@ -162,6 +174,10 @@ func (s *Service) claimDeviceEnrollment(w http.ResponseWriter, r *http.Request) 
 
 func (s *Service) revokeNode(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validMutationOrigin(r) {
+			writeError(w, http.StatusForbidden, "origine refusée")
+			return
+		}
 		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
 			return

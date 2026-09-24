@@ -25,9 +25,15 @@ type Entitlements struct {
 	Limits   map[string]int  `json:"limits"`
 }
 
-type Service struct{ db *gorm.DB }
+type Service struct {
+	db          *gorm.DB
+	deviceLimit *rateLimiter
+	enrollLimit *rateLimiter
+}
 
-func New(db *gorm.DB) *Service { return &Service{db: db} }
+func New(db *gorm.DB) *Service {
+	return &Service{db: db, deviceLimit: newRateLimiter(20, time.Hour), enrollLimit: newRateLimiter(10, time.Hour)}
+}
 
 func (s *Service) Migrate() error {
 	if err := s.db.AutoMigrate(

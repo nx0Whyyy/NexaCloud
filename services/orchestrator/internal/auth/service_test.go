@@ -3,6 +3,7 @@ package auth
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestTokenHashIsStableAndOpaque(t *testing.T) {
@@ -16,6 +17,29 @@ func TestTokenHashIsStableAndOpaque(t *testing.T) {
 	}
 }
 
+func TestPasswordPolicy(t *testing.T) {
+	if message := passwordPolicy("short", "user", "user@example.com"); message == "" {
+		t.Fatal("short password should be rejected")
+	}
+	if message := passwordPolicy("NexaCloud!Secure2026", "nexa", "person@example.com"); message == "" {
+		t.Fatal("password containing username should be rejected")
+	}
+	if message := passwordPolicy("Cloud!River92Stone", "nexa", "person@example.com"); message != "" {
+		t.Fatalf("strong password should be accepted: %s", message)
+	}
+}
+
+func TestLimiter(t *testing.T) {
+	limit := newLimiter(2, time.Minute)
+	now := time.Now()
+	if !limit.allow("key", now) || !limit.allow("key", now) || limit.allow("key", now) {
+		t.Fatal("limiter should reject requests above its threshold")
+	}
+	if !limit.allow("key", now.Add(2*time.Minute)) {
+		t.Fatal("limiter should reset after its window")
+	}
+}
+
 func TestValidOrigin(t *testing.T) {
 	request := httptest.NewRequest("POST", "https://cloud.nexastudio.dev/api/v1/auth/login", nil)
 	request.Host = "cloud.nexastudio.dev"
@@ -26,5 +50,10 @@ func TestValidOrigin(t *testing.T) {
 	request.Header.Set("Origin", "https://example.com")
 	if validOrigin(request) {
 		t.Fatal("cross-origin request should be rejected")
+	}
+	request.Header.Del("Origin")
+	request.Header.Set("Sec-Fetch-Site", "cross-site")
+	if validOrigin(request) {
+		t.Fatal("cross-site browser request without origin should be rejected")
 	}
 }

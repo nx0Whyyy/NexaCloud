@@ -20,6 +20,7 @@ import (
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/config"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/crashloop"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/lifecycle"
+	"github.com/nexastudio/nexacloud/services/orchestrator/internal/mailer"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/shift"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -84,7 +85,8 @@ func New(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*Orchest
 	o.shift = shift.New(db, nc, logger)
 	o.crashloop = crashloop.New(db, logger)
 	o.access = access.New(db)
-	o.auth = auth.New(db, o.access.ProvisionUser)
+	mailService := mailer.New(mailer.Config{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom, FromName: cfg.SMTPFromName})
+	o.auth = auth.New(db, o.access.ProvisionUser, mailService, cfg.PublicURL)
 
 	if err := o.migrate(); err != nil {
 		return nil, err
@@ -137,6 +139,7 @@ func (o *Orchestrator) setupRoutes() {
 	o.mux.HandleFunc("GET /docs", o.servePage("docs.html"))
 	o.mux.HandleFunc("GET /login", o.servePage("login.html"))
 	o.mux.HandleFunc("GET /register", o.servePage("register.html"))
+	o.mux.HandleFunc("GET /verify", o.servePage("verify.html"))
 	o.mux.HandleFunc("GET /dashboard", o.servePage("dashboard.html"))
 	o.mux.HandleFunc("GET /staff", o.servePage("staff.html"))
 	o.mux.HandleFunc("/", o.handleRoot)

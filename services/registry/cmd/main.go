@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nexastudio/nexacloud/pkg/model"
@@ -64,8 +65,12 @@ func main() {
 	defer sub2.Drain()
 
 	srv := &http.Server{
-		Addr:    ":" + strconv.Itoa(cfg.APIPort),
-		Handler: newHandler(db, reg, rt),
+		Addr:              ":" + strconv.Itoa(cfg.APIPort),
+		Handler:           newHandler(db, reg, rt),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

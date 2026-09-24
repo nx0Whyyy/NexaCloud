@@ -66,6 +66,13 @@ services:
       NEXA_ADMIN_USERNAME: ${NEXA_ADMIN_USERNAME:-}
       NEXA_ADMIN_EMAIL: ${NEXA_ADMIN_EMAIL:-}
       NEXA_ADMIN_PASSWORD: ${NEXA_ADMIN_PASSWORD:-}
+      PUBLIC_URL: ${PUBLIC_URL:-https://cloud.nexastudio.dev}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@nexastudio.dev}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-NexaCloud}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
       interval: 10s

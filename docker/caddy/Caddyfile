@@ -11,12 +11,9 @@ cloud.nexastudio.dev {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
 		-Server
-	}
-
-	@registry path /api/v1/services /api/v1/routing
-	handle @registry {
-		reverse_proxy registry:8081
 	}
 
 	handle {
@@ -36,6 +33,8 @@ cloud.nexastudio.dev {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		Cross-Origin-Opener-Policy "same-origin"
 		-Server
 	}
 }

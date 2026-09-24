@@ -183,6 +183,10 @@ function bindUserActions() {
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form));
     const message = form.querySelector("[data-device-message]");
+    if (/^NX-(?!A-)/i.test(values.code.trim())) {
+      message.textContent = "Ceci est une clé de licence. Saisissez le code NXA-XXX-XXX affiché par NexaAgent.";
+      return;
+    }
     try {
       await request("/api/v1/device/approve", { method: "POST", body: JSON.stringify(values) });
       form.closest("dialog").close(); form.reset(); await refreshUserDashboard("Node autorisé");
@@ -196,9 +200,19 @@ async function loadStaffDashboard() {
   Object.entries(data.counts).forEach(([key, value]) => setText(`[data-count="${key}"]`, value));
   renderActivity(data.activity);
   const users = document.querySelector("[data-users]");
+  const canManageRoles = ["admin", "owner"].includes(data.user.role);
   users.replaceChildren(...data.users.map((user) => {
     const row = document.createElement("div"); row.className = "user-row";
-    [user.username, user.email, user.role].forEach((value, index) => { const element = document.createElement(index === 0 ? "strong" : index === 1 ? "span" : "b"); element.textContent = value; row.append(element); });
+    const username = document.createElement("strong"); username.textContent = user.username;
+    const email = document.createElement("span"); email.textContent = user.email;
+    const role = document.createElement("select"); role.className = "role-select"; role.disabled = !canManageRoles || user.id === data.user.id;
+    ["user", "support", "moderator", "admin", "owner"].forEach((value) => role.append(new Option(value, value, false, user.role === value)));
+    role.addEventListener("change", async () => {
+      const previous = user.role;
+      try { await request(`/api/v1/staff/users/${user.id}/role`, { method: "PATCH", body: JSON.stringify({ role: role.value }) }); user.role = role.value; }
+      catch (error) { role.value = previous; window.alert(error.message); }
+    });
+    row.append(username, email, role);
     return row;
   }));
 }

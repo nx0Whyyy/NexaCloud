@@ -18,6 +18,14 @@ const (
 	argonKeyLen  = 32
 )
 
+var dummyPasswordHash = func() string {
+	hash, err := hashPassword("Dummy!Password2026#Timing")
+	if err != nil {
+		panic(err)
+	}
+	return hash
+}()
+
 func hashPassword(password string) (string, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {

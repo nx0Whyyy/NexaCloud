@@ -1,6 +1,6 @@
 module github.com/nexastudio/nexacloud/services/registry
 
-go 1.23
+go 1.25
 
 require (
 	github.com/google/uuid v1.6.0

@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/nexastudio/nexacloud/pkg/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type UserResolver func(*http.Request) (*model.User, error)
@@ -71,6 +73,10 @@ func (s *Service) entitlements(resolve UserResolver) http.HandlerFunc {
 
 func (s *Service) createNetwork(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validMutationOrigin(r) {
+			writeError(w, http.StatusForbidden, "origine refusée")
+			return
+		}
 		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
 			return
@@ -106,6 +112,10 @@ func (s *Service) createNetwork(resolve UserResolver) http.HandlerFunc {
 
 func (s *Service) createLicense(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validMutationOrigin(r) {
+			writeError(w, http.StatusForbidden, "origine refusée")
+			return
+		}
 		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
 			return
@@ -131,6 +141,10 @@ func (s *Service) createLicense(resolve UserResolver) http.HandlerFunc {
 
 func (s *Service) revokeLicense(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validMutationOrigin(r) {
+			writeError(w, http.StatusForbidden, "origine refusée")
+			return
+		}
 		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
 			return
@@ -159,31 +173,53 @@ func (s *Service) audit(orgID uuid.UUID, actor, action, resourceType, resourceID
 	_ = s.db.Create(&model.AuditEntry{ID: model.NewID(), OrganizationID: &orgID, Actor: actor, Action: action, ResourceType: resourceType, ResourceID: resourceID, IPAddress: ip, Result: "success", CreatedAt: model.Now()}).Error
 }
 
+func validMutationOrigin(r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		return false
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return r.Header.Get("Sec-Fetch-Site") == "" || r.Header.Get("Sec-Fetch-Site") == "same-origin"
+	}
+	parsed, err := url.Parse(origin)
+	return err == nil && strings.EqualFold(parsed.Host, r.Host)
+}
+
 func (s *Service) enrollNode(w http.ResponseWriter, r *http.Request) {
+	if !s.enrollLimit.allow(clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "enrollment rate limit reached")
+		return
+	}
 	var input struct {
 		LicenseKey string          `json:"license_key"`
 		NetworkID  uuid.UUID       `json:"network_id"`
 		Name       string          `json:"name"`
+		PublicKey  string          `json:"public_key"`
 		Resources  model.Resources `json:"resources"`
 	}
-	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input) != nil || input.LicenseKey == "" || input.NetworkID == uuid.Nil || strings.TrimSpace(input.Name) == "" {
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input) != nil || input.LicenseKey == "" || input.NetworkID == uuid.Nil || strings.TrimSpace(input.Name) == "" || len(strings.TrimSpace(input.PublicKey)) < 32 {
 		writeError(w, http.StatusBadRequest, "invalid enrollment request")
 		return
 	}
 	sum := sha256.Sum256([]byte(strings.ToUpper(strings.TrimSpace(input.LicenseKey))))
 	hash := hex.EncodeToString(sum[:])
 	var created model.Node
+	var credential model.NodeCredential
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var license model.License
-		if err := tx.Where("key_hash = ?", hash).First(&license).Error; err != nil || !LicenseUsable(license, model.Now()) {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("key_hash = ?", hash).First(&license).Error; err != nil || !LicenseUsable(license, model.Now()) {
 			return errors.New("invalid license")
 		}
 		var network model.Network
 		if err := tx.Where("id = ? AND organization_id = ? AND status = ?", input.NetworkID, license.OrganizationID, "ACTIVE").First(&network).Error; err != nil {
 			return errors.New("invalid network")
 		}
-		rights, _, err := entitlementsFor(tx, license.OrganizationID)
-		if err != nil {
+		var subscription model.Subscription
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("organization_id = ?", license.OrganizationID).First(&subscription).Error; err != nil {
+			return err
+		}
+		var rights Entitlements
+		if err := json.Unmarshal([]byte(subscription.EntitlementData), &rights); err != nil {
 			return err
 		}
 		var count int64
@@ -198,13 +234,18 @@ func (s *Service) enrollNode(w http.ResponseWriter, r *http.Request) {
 		if err := tx.Create(&created).Error; err != nil {
 			return err
 		}
+		fingerprint := sha256.Sum256([]byte(strings.TrimSpace(input.PublicKey)))
+		credential = model.NodeCredential{ID: model.NewID(), NodeID: created.ID, PublicKey: strings.TrimSpace(input.PublicKey), Fingerprint: hex.EncodeToString(fingerprint[:]), Status: "ACTIVE", CreatedAt: now}
+		if err := tx.Create(&credential).Error; err != nil {
+			return err
+		}
 		return tx.Model(&license).Update("last_used_at", now).Error
 	})
 	if err != nil {
-		writeError(w, http.StatusForbidden, err.Error())
+		writeError(w, http.StatusForbidden, safeAccessError(err))
 		return
 	}
-	writeJSON(w, http.StatusCreated, created)
+	writeJSON(w, http.StatusCreated, map[string]any{"node": created, "credential_id": credential.ID, "fingerprint": credential.Fingerprint})
 }
 
 func (s *Service) authorize(w http.ResponseWriter, r *http.Request, resolve UserResolver) (*model.User, model.Organization, string, bool) {
@@ -235,4 +276,13 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func safeAccessError(err error) string {
+	message := err.Error()
+	allowed := map[string]bool{"invalid license": true, "invalid network": true, "node quota reached": true, "device code is invalid or expired": true, "network not found": true}
+	if allowed[message] {
+		return message
+	}
+	return "request could not be completed"
 }
