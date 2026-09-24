@@ -59,3 +59,17 @@ changelog.nexastudio.dev {
 		format console
 	}
 }
+
+www.nexastudio.dev {
+	redir https://nexastudio.dev{uri} permanent
+}
+
+nexastudio.dev {
+	encode zstd gzip
+	import public_security
+	reverse_proxy nexastudio_nginx:80
+	log {
+		output stdout
+		format console
+	}
+}
