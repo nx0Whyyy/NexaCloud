@@ -129,6 +129,8 @@ func (o *Orchestrator) setupRoutes() {
 		o.auth.RegisterRoutes(o.mux)
 	}
 	o.mux.HandleFunc("GET /platform", o.servePage("platform.html"))
+	o.mux.HandleFunc("GET /infrastructure", o.servePage("infrastructure.html"))
+	o.mux.HandleFunc("GET /docs", o.servePage("docs.html"))
 	o.mux.HandleFunc("GET /login", o.servePage("login.html"))
 	o.mux.HandleFunc("GET /register", o.servePage("register.html"))
 	o.mux.HandleFunc("GET /dashboard", o.servePage("dashboard.html"))
