@@ -256,6 +256,32 @@ CREATE TABLE instance_slots (
     reserved_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE node_credentials (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    node_id     UUID NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    public_key  TEXT NOT NULL,
+    fingerprint TEXT UNIQUE NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ,
+    revoked_at  TIMESTAMPTZ
+);
+
+CREATE TABLE device_enrollments (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code_hash           TEXT UNIQUE NOT NULL,
+    device_token_hash   TEXT UNIQUE NOT NULL,
+    node_name           TEXT NOT NULL,
+    public_key          TEXT NOT NULL,
+    resources           JSONB NOT NULL DEFAULT '{}',
+    status              TEXT NOT NULL DEFAULT 'PENDING',
+    node_id             UUID REFERENCES nodes(id),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at          TIMESTAMPTZ NOT NULL,
+    approved_at         TIMESTAMPTZ,
+    claimed_at          TIMESTAMPTZ
+);
+
 ALTER TABLE nodes ADD COLUMN organization_id UUID REFERENCES organizations(id);
 ALTER TABLE nodes ADD COLUMN network_id UUID REFERENCES networks(id);
 ALTER TABLE instances ADD COLUMN organization_id UUID REFERENCES organizations(id);
@@ -306,6 +332,8 @@ CREATE INDEX idx_organization_members_user ON organization_members(user_id);
 CREATE INDEX idx_licenses_organization ON licenses(organization_id);
 CREATE INDEX idx_networks_organization ON networks(organization_id);
 CREATE INDEX idx_instance_slots_organization ON instance_slots(organization_id);
+CREATE INDEX idx_node_credentials_node ON node_credentials(node_id);
+CREATE INDEX idx_device_enrollments_expiry ON device_enrollments(expires_at);
 CREATE INDEX idx_snapshots_component ON snapshots(component);
 CREATE INDEX idx_snapshots_checked_at ON snapshots(checked_at DESC);
 CREATE INDEX idx_incidents_component ON incidents(component);

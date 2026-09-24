@@ -34,6 +34,7 @@ func (s *Service) Migrate() error {
 		&model.Organization{}, &model.OrganizationMember{}, &model.Plan{},
 		&model.PlanEntitlement{}, &model.Subscription{}, &model.License{},
 		&model.Network{}, &model.InstanceSlot{}, &model.Node{}, &model.Instance{},
+		&model.NodeCredential{}, &model.DeviceEnrollment{},
 	); err != nil {
 		return err
 	}

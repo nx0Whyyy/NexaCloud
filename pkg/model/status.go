@@ -4,37 +4,38 @@ package model
 type InstanceStatus string
 
 const (
-	InstanceCreating     InstanceStatus = "CREATING"
-	InstanceStarting     InstanceStatus = "STARTING"
-	InstanceReady        InstanceStatus = "READY"
-	InstanceActive       InstanceStatus = "ACTIVE"
-	InstanceDraining     InstanceStatus = "DRAINING"
-	InstanceMaintenance  InstanceStatus = "MAINTENANCE"
-	InstanceStopping     InstanceStatus = "STOPPING"
-	InstanceStopped      InstanceStatus = "STOPPED"
-	InstanceCrashed      InstanceStatus = "CRASHED"
-	InstanceSleeping     InstanceStatus = "SLEEPING"
-	InstanceQuarantined  InstanceStatus = "QUARANTINED"
+	InstanceCreating    InstanceStatus = "CREATING"
+	InstanceStarting    InstanceStatus = "STARTING"
+	InstanceReady       InstanceStatus = "READY"
+	InstanceActive      InstanceStatus = "ACTIVE"
+	InstanceDraining    InstanceStatus = "DRAINING"
+	InstanceMaintenance InstanceStatus = "MAINTENANCE"
+	InstanceStopping    InstanceStatus = "STOPPING"
+	InstanceStopped     InstanceStatus = "STOPPED"
+	InstanceCrashed     InstanceStatus = "CRASHED"
+	InstanceSleeping    InstanceStatus = "SLEEPING"
+	InstanceQuarantined InstanceStatus = "QUARANTINED"
 )
 
 // NodeStatus represents the status of a physical/virtual node.
 type NodeStatus string
 
 const (
-	NodeOnline    NodeStatus = "ONLINE"
-	NodeOffline   NodeStatus = "OFFLINE"
-	NodeDraining  NodeStatus = "DRAINING"
+	NodeOnline      NodeStatus = "ONLINE"
+	NodeOffline     NodeStatus = "OFFLINE"
+	NodeDraining    NodeStatus = "DRAINING"
 	NodeQuarantined NodeStatus = "QUARANTINED"
+	NodeRevoked     NodeStatus = "REVOKED"
 )
 
 // PulseStatus is the aggregated health score.
 type PulseStatus string
 
 const (
-	PulseHealthy   PulseStatus = "HEALTHY"
-	PulseDegraded  PulseStatus = "DEGRADED"
-	PulseCritical  PulseStatus = "CRITICAL"
-	PulseOffline   PulseStatus = "OFFLINE"
+	PulseHealthy  PulseStatus = "HEALTHY"
+	PulseDegraded PulseStatus = "DEGRADED"
+	PulseCritical PulseStatus = "CRITICAL"
+	PulseOffline  PulseStatus = "OFFLINE"
 )
 
 // AutopilotMode controls automated behavior.
@@ -51,23 +52,23 @@ const (
 type ServiceType string
 
 const (
-	ServiceTypeMinecraft  ServiceType = "minecraft"
-	ServiceTypeProxy      ServiceType = "proxy"
-	ServiceTypeDatabase   ServiceType = "database"
-	ServiceTypeCache      ServiceType = "cache"
-	ServiceTypeLimbo      ServiceType = "limbo"
-	ServiceTypeCustom     ServiceType = "custom"
+	ServiceTypeMinecraft ServiceType = "minecraft"
+	ServiceTypeProxy     ServiceType = "proxy"
+	ServiceTypeDatabase  ServiceType = "database"
+	ServiceTypeCache     ServiceType = "cache"
+	ServiceTypeLimbo     ServiceType = "limbo"
+	ServiceTypeCustom    ServiceType = "custom"
 )
 
 // SoftwareType identifies the Minecraft software.
 type SoftwareType string
 
 const (
-	SoftwarePaper     SoftwareType = "paper"
-	SoftwareFolia     SoftwareType = "folia"
-	SoftwareVelocity  SoftwareType = "velocity"
-	SoftwareRedis     SoftwareType = "redis"
-	SoftwareMariaDB   SoftwareType = "mariadb"
+	SoftwarePaper    SoftwareType = "paper"
+	SoftwareFolia    SoftwareType = "folia"
+	SoftwareVelocity SoftwareType = "velocity"
+	SoftwareRedis    SoftwareType = "redis"
+	SoftwareMariaDB  SoftwareType = "mariadb"
 )
 
 // DeploymentStrategy defines how a deployment is rolled out.
@@ -84,10 +85,10 @@ const (
 type DeploymentStatus string
 
 const (
-	DeploymentPending  DeploymentStatus = "PENDING"
-	DeploymentRunning  DeploymentStatus = "RUNNING"
-	DeploymentCompleted DeploymentStatus = "COMPLETED"
-	DeploymentFailed   DeploymentStatus = "FAILED"
+	DeploymentPending    DeploymentStatus = "PENDING"
+	DeploymentRunning    DeploymentStatus = "RUNNING"
+	DeploymentCompleted  DeploymentStatus = "COMPLETED"
+	DeploymentFailed     DeploymentStatus = "FAILED"
 	DeploymentRolledBack DeploymentStatus = "ROLLED_BACK"
 )
 
@@ -95,10 +96,10 @@ const (
 type BackupType string
 
 const (
-	BackupFull    BackupType = "full"
-	BackupWorld   BackupType = "world"
-	BackupConfig  BackupType = "config"
-	BackupPlugin  BackupType = "plugin"
+	BackupFull     BackupType = "full"
+	BackupWorld    BackupType = "world"
+	BackupConfig   BackupType = "config"
+	BackupPlugin   BackupType = "plugin"
 	BackupDatabase BackupType = "database"
 )
 

@@ -22,6 +22,10 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux, currentUser UserResolver) {
 	mux.HandleFunc("POST /api/v1/licenses", s.createLicense(currentUser))
 	mux.HandleFunc("DELETE /api/v1/licenses/{id}", s.revokeLicense(currentUser))
 	mux.HandleFunc("POST /api/v1/nodes/enroll", s.enrollNode)
+	mux.HandleFunc("POST /api/v1/device/code", s.createDeviceCode)
+	mux.HandleFunc("POST /api/v1/device/token", s.claimDeviceEnrollment)
+	mux.HandleFunc("POST /api/v1/device/approve", s.approveDeviceEnrollment(currentUser))
+	mux.HandleFunc("DELETE /api/v1/nodes/{id}", s.revokeNode(currentUser))
 }
 
 func (s *Service) currentOrganization(resolve UserResolver) http.HandlerFunc {

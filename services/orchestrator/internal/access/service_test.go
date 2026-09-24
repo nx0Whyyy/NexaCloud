@@ -35,3 +35,20 @@ func TestLicenseUsable(t *testing.T) {
 		t.Fatal("revoked license should not be usable")
 	}
 }
+
+func TestDeviceCodesAreDisplayableAndOpaque(t *testing.T) {
+	code, err := randomDisplayCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(code, "NXA-") || len(code) != 11 {
+		t.Fatalf("unexpected device code format: %q", code)
+	}
+	token, err := randomToken(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(token) < 40 || hashSecret(token) == token {
+		t.Fatal("device polling token must be high entropy and stored hashed")
+	}
+}

@@ -173,3 +173,5 @@ type AuditEntry struct {
 	Details      string    `json:"details"` // JSON blob
 	CreatedAt    time.Time `json:"created_at"`
 }
+
+func (AuditEntry) TableName() string { return "audit_log" }
