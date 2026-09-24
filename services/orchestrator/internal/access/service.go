@@ -66,9 +66,22 @@ func (s *Service) backfillUsers() error {
 
 func (s *Service) seedFreePlan() error {
 	now := model.Now()
-	plan := model.Plan{ID: model.NewID(), Code: FreePlanCode, Name: "Free", Active: true, CreatedAt: now, UpdatedAt: now}
-	if err := s.db.Where("code = ?", FreePlanCode).FirstOrCreate(&plan).Error; err != nil {
-		return err
+	var plan model.Plan
+	if err := s.db.Where("code = ?", FreePlanCode).First(&plan).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		plan = model.Plan{
+			ID:        model.NewID(),
+			Code:      FreePlanCode,
+			Name:      "Free",
+			Active:    true,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if err := s.db.Create(&plan).Error; err != nil {
+			return fmt.Errorf("create free plan: %w", err)
+		}
 	}
 	values := map[string]string{
 		"max_networks": "1", "max_nodes": "1", "max_active_instances": "3",
@@ -77,9 +90,28 @@ func (s *Service) seedFreePlan() error {
 		"feature_canary": "false", "feature_nexa_shift": "false",
 	}
 	for key, value := range values {
-		entry := model.PlanEntitlement{ID: model.NewID(), PlanID: plan.ID, Key: key, Value: value, CreatedAt: now, UpdatedAt: now}
-		if err := s.db.Where("plan_id = ? AND key = ?", plan.ID, key).Assign(map[string]any{"value": value, "updated_at": now}).FirstOrCreate(&entry).Error; err != nil {
-			return err
+		var entry model.PlanEntitlement
+		if err := s.db.Where("plan_id = ? AND key = ?", plan.ID, key).First(&entry).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			entry = model.PlanEntitlement{
+				ID:        model.NewID(),
+				PlanID:    plan.ID,
+				Key:       key,
+				Value:     value,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := s.db.Create(&entry).Error; err != nil {
+				return err
+			}
+		} else {
+			entry.Value = value
+			entry.UpdatedAt = now
+			if err := s.db.Save(&entry).Error; err != nil {
+				return err
+			}
 		}
 	}
 	return nil
