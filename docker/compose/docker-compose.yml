@@ -144,7 +144,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    networks: [backend]
+    networks:
+      - edge
+      - backend
 
   caddy:
     image: caddy:2-alpine

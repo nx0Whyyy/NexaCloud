@@ -257,7 +257,7 @@ func (s *Server) handleChangelog(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFrontend(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.NotFound(w, r)
 		return
 	}
