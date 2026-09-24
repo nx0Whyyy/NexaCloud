@@ -142,6 +142,7 @@ CREATE TABLE timeline_events (
 -- ------------------------------------------------------------------
 CREATE TABLE audit_log (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID,
     actor           TEXT NOT NULL,
     action          TEXT NOT NULL,
     resource_type   TEXT NOT NULL,
@@ -284,8 +285,11 @@ CREATE TABLE device_enrollments (
 
 ALTER TABLE nodes ADD COLUMN organization_id UUID REFERENCES organizations(id);
 ALTER TABLE nodes ADD COLUMN network_id UUID REFERENCES networks(id);
+ALTER TABLE services ADD COLUMN organization_id UUID REFERENCES organizations(id);
+ALTER TABLE services ADD COLUMN network_id UUID REFERENCES networks(id);
 ALTER TABLE instances ADD COLUMN organization_id UUID REFERENCES organizations(id);
 ALTER TABLE instances ADD COLUMN network_id UUID REFERENCES networks(id);
+ALTER TABLE audit_log ADD CONSTRAINT fk_audit_organization FOREIGN KEY (organization_id) REFERENCES organizations(id);
 
 CREATE TABLE user_sessions (
     token_hash      TEXT PRIMARY KEY,

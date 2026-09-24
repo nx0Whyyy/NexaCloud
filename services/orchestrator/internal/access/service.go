@@ -33,8 +33,9 @@ func (s *Service) Migrate() error {
 	if err := s.db.AutoMigrate(
 		&model.Organization{}, &model.OrganizationMember{}, &model.Plan{},
 		&model.PlanEntitlement{}, &model.Subscription{}, &model.License{},
-		&model.Network{}, &model.InstanceSlot{}, &model.Node{}, &model.Instance{},
+		&model.Network{}, &model.InstanceSlot{}, &model.Node{}, &model.Service{}, &model.Instance{},
 		&model.NodeCredential{}, &model.DeviceEnrollment{},
+		&model.AuditEntry{},
 	); err != nil {
 		return err
 	}

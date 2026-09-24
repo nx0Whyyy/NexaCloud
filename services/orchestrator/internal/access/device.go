@@ -111,7 +111,7 @@ func (s *Service) approveDeviceEnrollment(resolve UserResolver) http.HandlerFunc
 			if err := tx.Save(&enrollment).Error; err != nil {
 				return err
 			}
-			return tx.Create(&model.AuditEntry{ID: model.NewID(), Actor: user.ID.String(), Action: "NODE_ENROLL", ResourceType: "node", ResourceID: node.ID.String(), IPAddress: clientIP(r), Result: "success", Details: model.JSON(map[string]any{"network_id": network.ID}), CreatedAt: now}).Error
+			return tx.Create(&model.AuditEntry{ID: model.NewID(), OrganizationID: &org.ID, Actor: user.ID.String(), Action: "NODE_ENROLL", ResourceType: "node", ResourceID: node.ID.String(), IPAddress: clientIP(r), Result: "success", Details: model.JSON(map[string]any{"network_id": network.ID}), CreatedAt: now}).Error
 		})
 		if err != nil {
 			writeError(w, http.StatusConflict, err.Error())
@@ -184,7 +184,7 @@ func (s *Service) revokeNode(resolve UserResolver) http.HandlerFunc {
 			if err := tx.Model(&model.NodeCredential{}).Where("node_id = ? AND revoked_at IS NULL", nodeID).Updates(map[string]any{"status": "REVOKED", "revoked_at": now}).Error; err != nil {
 				return err
 			}
-			return tx.Create(&model.AuditEntry{ID: model.NewID(), Actor: user.ID.String(), Action: "NODE_REVOKE", ResourceType: "node", ResourceID: nodeID.String(), IPAddress: clientIP(r), Result: "success", CreatedAt: now}).Error
+			return tx.Create(&model.AuditEntry{ID: model.NewID(), OrganizationID: &org.ID, Actor: user.ID.String(), Action: "NODE_REVOKE", ResourceType: "node", ResourceID: nodeID.String(), IPAddress: clientIP(r), Result: "success", CreatedAt: now}).Error
 		})
 		if err != nil {
 			writeError(w, http.StatusNotFound, "node not found")

@@ -51,6 +51,8 @@ type ContainerInfo struct {
 // Service defines a logical group of instances (e.g. "skyblock", "lobby").
 type Service struct {
 	ID             uuid.UUID    `json:"id" gorm:"type:uuid;primarykey"`
+	OrganizationID *uuid.UUID   `json:"organization_id,omitempty" gorm:"type:uuid;index"`
+	NetworkID      *uuid.UUID   `json:"network_id,omitempty" gorm:"type:uuid;index"`
 	Name           string       `json:"name" gorm:"unique;size:100"`
 	Type           ServiceType  `json:"type" gorm:"size:20"`
 	Software       SoftwareSpec `json:"software" gorm:"type:jsonb"`
@@ -163,15 +165,16 @@ type TimelineEvent struct {
 
 // AuditEntry records an auditable action.
 type AuditEntry struct {
-	ID           uuid.UUID `json:"id" gorm:"type:uuid;primarykey"`
-	Actor        string    `json:"actor"`
-	Action       string    `json:"action"`
-	ResourceType string    `json:"resource_type"`
-	ResourceID   string    `json:"resource_id"`
-	IPAddress    string    `json:"ip_address,omitempty"`
-	Result       string    `json:"result"`  // success, failure
-	Details      string    `json:"details"` // JSON blob
-	CreatedAt    time.Time `json:"created_at"`
+	ID             uuid.UUID  `json:"id" gorm:"type:uuid;primarykey"`
+	OrganizationID *uuid.UUID `json:"organization_id,omitempty" gorm:"type:uuid;index"`
+	Actor          string     `json:"actor"`
+	Action         string     `json:"action"`
+	ResourceType   string     `json:"resource_type"`
+	ResourceID     string     `json:"resource_id"`
+	IPAddress      string     `json:"ip_address,omitempty"`
+	Result         string     `json:"result"`  // success, failure
+	Details        string     `json:"details"` // JSON blob
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 func (AuditEntry) TableName() string { return "audit_log" }

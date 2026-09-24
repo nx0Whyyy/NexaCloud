@@ -37,10 +37,16 @@ func (s *Service) currentOrganization(resolve UserResolver) http.HandlerFunc {
 		var networks []model.Network
 		var licenses []model.License
 		var nodes []model.Node
+		var services []model.Service
+		var instances []model.Instance
+		var activity []model.AuditEntry
 		s.db.Where("organization_id = ?", org.ID).Order("created_at").Find(&networks)
 		s.db.Where("organization_id = ?", org.ID).Order("created_at").Find(&licenses)
 		s.db.Where("organization_id = ?", org.ID).Order("created_at").Find(&nodes)
-		writeJSON(w, http.StatusOK, map[string]any{"organization": org, "role": role, "networks": networks, "nodes": nodes, "licenses": licenses})
+		s.db.Where("organization_id = ?", org.ID).Order("created_at").Find(&services)
+		s.db.Where("organization_id = ?", org.ID).Order("created_at").Find(&instances)
+		s.db.Where("organization_id = ?", org.ID).Order("created_at DESC").Limit(20).Find(&activity)
+		writeJSON(w, http.StatusOK, map[string]any{"organization": org, "role": role, "networks": networks, "nodes": nodes, "services": services, "instances": instances, "licenses": licenses, "activity": activity})
 	}
 }
 
@@ -56,14 +62,16 @@ func (s *Service) entitlements(resolve UserResolver) http.HandlerFunc {
 			return
 		}
 		var active int64
+		var plan model.Plan
+		s.db.First(&plan, "id = ?", subscription.PlanID)
 		s.db.Model(&model.InstanceSlot{}).Where("organization_id = ?", org.ID).Count(&active)
-		writeJSON(w, http.StatusOK, map[string]any{"subscription": subscription, "entitlements": rights, "usage": map[string]int64{"active_instances": active}})
+		writeJSON(w, http.StatusOK, map[string]any{"subscription": subscription, "plan": plan, "entitlements": rights, "usage": map[string]int64{"active_instances": active}})
 	}
 }
 
 func (s *Service) createNetwork(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, org, role, ok := s.authorize(w, r, resolve)
+		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
 			return
 		}
@@ -91,13 +99,14 @@ func (s *Service) createNetwork(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusConflict, "network could not be created")
 			return
 		}
+		s.audit(org.ID, user.ID.String(), "NETWORK_CREATE", "network", network.ID.String(), clientIP(r))
 		writeJSON(w, http.StatusCreated, network)
 	}
 }
 
 func (s *Service) createLicense(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, org, role, ok := s.authorize(w, r, resolve)
+		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
 			return
 		}
@@ -115,13 +124,14 @@ func (s *Service) createLicense(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "license could not be created")
 			return
 		}
+		s.audit(org.ID, user.ID.String(), "LICENSE_CREATE", "license", license.ID.String(), clientIP(r))
 		writeJSON(w, http.StatusCreated, map[string]any{"license": license, "key": key})
 	}
 }
 
 func (s *Service) revokeLicense(resolve UserResolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, org, role, ok := s.authorize(w, r, resolve)
+		user, org, role, ok := s.authorize(w, r, resolve)
 		if !ok {
 			return
 		}
@@ -140,8 +150,13 @@ func (s *Service) revokeLicense(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "license not found")
 			return
 		}
+		s.audit(org.ID, user.ID.String(), "LICENSE_REVOKE", "license", id.String(), clientIP(r))
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func (s *Service) audit(orgID uuid.UUID, actor, action, resourceType, resourceID, ip string) {
+	_ = s.db.Create(&model.AuditEntry{ID: model.NewID(), OrganizationID: &orgID, Actor: actor, Action: action, ResourceType: resourceType, ResourceID: resourceID, IPAddress: ip, Result: "success", CreatedAt: model.Now()}).Error
 }
 
 func (s *Service) enrollNode(w http.ResponseWriter, r *http.Request) {
