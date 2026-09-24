@@ -7,29 +7,35 @@ import (
 )
 
 type Config struct {
-	APIPort    int
-	NATSUrl   string
-	DBHost     string
-	DBPort     int
-	DBUser     string
-	DBPassword string
-	DBName     string
-	RedisHost  string
-	RedisPort  int
+	APIPort           int
+	NATSUrl           string
+	DBHost            string
+	DBPort            int
+	DBUser            string
+	DBPassword        string
+	DBName            string
+	RedisHost         string
+	RedisPort         int
+	AdminUsername     string
+	AdminEmail        string
+	AdminPassword     string
 	ReconcileInterval time.Duration
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		APIPort:    getEnvInt("API_PORT", 8080),
-		NATSUrl:   getEnv("NATS_URL", "nats://localhost:4222"),
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnvInt("DB_PORT", 5432),
-		DBUser:     getEnv("DB_USER", "nexacloud"),
-		DBPassword: getEnv("DB_PASSWORD", "nexacloud"),
-		DBName:     getEnv("DB_NAME", "nexacloud"),
-		RedisHost:  getEnv("REDIS_HOST", "localhost"),
-		RedisPort:  getEnvInt("REDIS_PORT", 6379),
+		APIPort:           getEnvInt("API_PORT", 8080),
+		NATSUrl:           getEnv("NATS_URL", "nats://localhost:4222"),
+		DBHost:            getEnv("DB_HOST", "localhost"),
+		DBPort:            getEnvInt("DB_PORT", 5432),
+		DBUser:            getEnv("DB_USER", "nexacloud"),
+		DBPassword:        getEnv("DB_PASSWORD", "nexacloud"),
+		DBName:            getEnv("DB_NAME", "nexacloud"),
+		RedisHost:         getEnv("REDIS_HOST", "localhost"),
+		RedisPort:         getEnvInt("REDIS_PORT", 6379),
+		AdminUsername:     getEnv("NEXA_ADMIN_USERNAME", ""),
+		AdminEmail:        getEnv("NEXA_ADMIN_EMAIL", ""),
+		AdminPassword:     getEnv("NEXA_ADMIN_PASSWORD", ""),
 		ReconcileInterval: getEnvDuration("RECONCILE_INTERVAL", 5*time.Second),
 	}
 	return c, nil

@@ -63,6 +63,9 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       REDIS_HOST: redis
       NATS_URL: nats://nats:4222
+      NEXA_ADMIN_USERNAME: ${NEXA_ADMIN_USERNAME:-}
+      NEXA_ADMIN_EMAIL: ${NEXA_ADMIN_EMAIL:-}
+      NEXA_ADMIN_PASSWORD: ${NEXA_ADMIN_PASSWORD:-}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
       interval: 10s

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nexastudio/nexacloud/services/orchestrator/internal/auth"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/config"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/crashloop"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/lifecycle"
@@ -36,6 +37,7 @@ type Orchestrator struct {
 	lifecycle *lifecycle.Manager
 	shift     *shift.Shifter
 	crashloop *crashloop.Detector
+	auth      *auth.Service
 
 	wg     sync.WaitGroup
 	mux    *http.ServeMux
@@ -79,9 +81,15 @@ func New(ctx context.Context, logger *slog.Logger, cfg *config.Config) (*Orchest
 	o.lifecycle = lifecycle.New(db, nc, logger)
 	o.shift = shift.New(db, nc, logger)
 	o.crashloop = crashloop.New(db, logger)
+	o.auth = auth.New(db)
 
+	if err := o.migrate(); err != nil {
+		return nil, err
+	}
+	if err := o.auth.EnsureAdmin(cfg.AdminUsername, cfg.AdminEmail, cfg.AdminPassword); err != nil {
+		return nil, err
+	}
 	o.setupRoutes()
-	o.migrate()
 
 	return o, nil
 }
@@ -117,11 +125,27 @@ func (o *Orchestrator) setupRoutes() {
 	o.mux.Handle("/assets/", http.FileServer(http.FS(staticFiles)))
 	o.mux.HandleFunc("/healthz", o.handleHealth)
 	o.mux.HandleFunc("/api/v1/platform", o.handlePlatform)
+	if o.auth != nil {
+		o.auth.RegisterRoutes(o.mux)
+	}
+	o.mux.HandleFunc("GET /platform", o.servePage("platform.html"))
+	o.mux.HandleFunc("GET /login", o.servePage("login.html"))
+	o.mux.HandleFunc("GET /register", o.servePage("register.html"))
+	o.mux.HandleFunc("GET /dashboard", o.servePage("dashboard.html"))
+	o.mux.HandleFunc("GET /staff", o.servePage("staff.html"))
 	o.mux.HandleFunc("/", o.handleRoot)
 }
 
-func (o *Orchestrator) migrate() {
-	_ = o.db
+func (o *Orchestrator) migrate() error {
+	return o.auth.Migrate()
+}
+
+func (o *Orchestrator) servePage(name string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFileFS(w, r, staticFiles(), name)
+	}
 }
 
 func (o *Orchestrator) Shutdown(ctx context.Context) error {

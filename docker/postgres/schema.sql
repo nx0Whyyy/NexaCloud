@@ -165,6 +165,26 @@ CREATE TABLE secrets (
 );
 
 -- ------------------------------------------------------------------
+-- User identities and browser sessions
+-- ------------------------------------------------------------------
+CREATE TABLE users (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username        TEXT UNIQUE NOT NULL,
+    email           TEXT UNIQUE NOT NULL,
+    password_hash   TEXT NOT NULL,
+    role            TEXT NOT NULL DEFAULT 'user',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE user_sessions (
+    token_hash      TEXT PRIMARY KEY,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ------------------------------------------------------------------
 -- Indexes
 -- ------------------------------------------------------------------
 CREATE INDEX idx_instances_service ON instances(service_name);
@@ -175,3 +195,5 @@ CREATE INDEX idx_timeline_time     ON timeline_events(created_at DESC);
 CREATE INDEX idx_nodes_heartbeat   ON nodes(last_heartbeat DESC);
 CREATE INDEX idx_audit_time        ON audit_log(created_at DESC);
 CREATE INDEX idx_configs_scope     ON configs(scope, path);
+CREATE INDEX idx_user_sessions_user ON user_sessions(user_id);
+CREATE INDEX idx_user_sessions_expiry ON user_sessions(expires_at);
