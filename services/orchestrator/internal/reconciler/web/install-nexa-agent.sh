@@ -11,25 +11,38 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates git docker.io
+apt-get install -y --no-install-recommends ca-certificates curl docker.io
 systemctl enable --now docker
 
-if [ -d /opt/nexacloud-agent-src/.git ]; then
-  git -C /opt/nexacloud-agent-src fetch --depth 1 origin main
-  git -C /opt/nexacloud-agent-src reset --hard origin/main
-else
-  git clone --depth 1 https://github.com/nx0Whyyy/NexaCloud.git /opt/nexacloud-agent-src
-fi
+case "$(uname -m)" in
+  x86_64|amd64) AGENT_ARCH=amd64 ;;
+  *) echo "Unsupported architecture: $(uname -m)" >&2; exit 3 ;;
+esac
+curl -fsSL "https://cloud.nexastudio.dev/downloads/nexa-agent-linux-$AGENT_ARCH" -o /usr/local/bin/nexa-agent
+chmod 0755 /usr/local/bin/nexa-agent
+install -d -m 0700 /var/lib/nexacloud
 
-docker build -f /opt/nexacloud-agent-src/docker/Dockerfile.agent -t nexacloud-agent:latest /opt/nexacloud-agent-src
-docker volume create nexacloud-agent-state >/dev/null
-docker run --rm --network host \
-  -e NEXA_NODE_NAME="$NODE_NAME" -e NEXA_STATE_PATH=/state/agent.json \
-  -v nexacloud-agent-state:/state nexacloud-agent:latest register
-docker rm -f nexacloud-agent >/dev/null 2>&1 || true
-docker run -d --name nexacloud-agent --restart unless-stopped --network host \
-  -e NEXA_NODE_NAME="$NODE_NAME" -e NEXA_STATE_PATH=/state/agent.json \
-  -v nexacloud-agent-state:/state -v /var/run/docker.sock:/var/run/docker.sock \
-  nexacloud-agent:latest run
+NEXA_NODE_NAME="$NODE_NAME" NEXA_STATE_PATH=/var/lib/nexacloud/agent.json nexa-agent register
+cat >/etc/systemd/system/nexa-agent.service <<EOF
+[Unit]
+Description=NexaCloud node agent
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+Environment=NEXA_NODE_NAME=$NODE_NAME
+Environment=NEXA_STATE_PATH=/var/lib/nexacloud/agent.json
+ExecStart=/usr/local/bin/nexa-agent run
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now nexa-agent
 
 echo "NexaAgent installed and started."
