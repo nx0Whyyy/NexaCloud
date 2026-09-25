@@ -130,7 +130,11 @@ func (s *Service) serverAction(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "action invalide")
 			return
 		}
-		command := s.queueCommand(org.ID, *instance.NodeID, instance.ID, commandName, nil)
+		command, err := s.queueCommand(org.ID, *instance.NodeID, instance.ID, commandName, nil)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "commande indisponible")
+			return
+		}
 		_ = s.db.Create(&model.AuditEntry{ID: model.NewID(), OrganizationID: &org.ID, Actor: user.ID.String(), Action: commandName, ResourceType: "instance", ResourceID: instance.ID.String(), IPAddress: clientIP(r), Result: "queued", CreatedAt: model.Now()}).Error
 		writeJSON(w, http.StatusAccepted, command)
 	}
@@ -162,7 +166,12 @@ func (s *Service) serverConsole(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "commande invalide")
 			return
 		}
-		writeJSON(w, http.StatusAccepted, s.queueCommand(org.ID, *instance.NodeID, instance.ID, "CONSOLE", map[string]string{"command": input.Command}))
+		command, err := s.queueCommand(org.ID, *instance.NodeID, instance.ID, "CONSOLE", map[string]string{"command": input.Command})
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "console indisponible")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, command)
 	}
 }
 
@@ -201,7 +210,12 @@ func (s *Service) serverFiles(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "opération fichier invalide")
 			return
 		}
-		writeJSON(w, http.StatusAccepted, s.queueCommand(org.ID, *instance.NodeID, instance.ID, commandName, map[string]string{"path": clean, "content": input.Content}))
+		command, err := s.queueCommand(org.ID, *instance.NodeID, instance.ID, commandName, map[string]string{"path": clean, "content": input.Content})
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "opération fichier indisponible")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, command)
 	}
 }
 
@@ -243,10 +257,9 @@ func (s *Service) authorizeInstance(w http.ResponseWriter, r *http.Request, reso
 	return user, org, role, instance, true
 }
 
-func (s *Service) queueCommand(orgID, nodeID, instanceID uuid.UUID, command string, params map[string]string) model.AgentCommand {
+func (s *Service) queueCommand(orgID, nodeID, instanceID uuid.UUID, command string, params map[string]string) (model.AgentCommand, error) {
 	queued := model.AgentCommand{ID: model.NewID(), OrganizationID: orgID, NodeID: nodeID, InstanceID: &instanceID, Command: command, Status: "PENDING", Params: params, CreatedAt: model.Now()}
-	s.db.Create(&queued)
-	return queued
+	return queued, s.db.Create(&queued).Error
 }
 
 func (s *Service) nextAgentCommand(w http.ResponseWriter, r *http.Request) {

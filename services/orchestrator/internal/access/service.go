@@ -37,6 +37,17 @@ func New(db *gorm.DB) *Service {
 }
 
 func (s *Service) Migrate() error {
+	if s.db.Dialector.Name() == "postgres" {
+		for _, statement := range []string{
+			"ALTER TABLE nodes DROP CONSTRAINT IF EXISTS nodes_name_key",
+			"ALTER TABLE services DROP CONSTRAINT IF EXISTS services_name_key",
+			"ALTER TABLE instances DROP CONSTRAINT IF EXISTS instances_name_key",
+		} {
+			if err := s.db.Exec(statement).Error; err != nil {
+				return err
+			}
+		}
+	}
 	if err := s.db.AutoMigrate(
 		&model.Organization{}, &model.OrganizationMember{}, &model.Plan{},
 		&model.PlanEntitlement{}, &model.Subscription{}, &model.License{},

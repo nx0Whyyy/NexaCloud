@@ -27,6 +27,19 @@ func TestLandingPage(t *testing.T) {
 	}
 }
 
+func TestSecurityHeaders(t *testing.T) {
+	orchestrator := &Orchestrator{mux: http.NewServeMux()}
+	orchestrator.setupRoutes()
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	orchestrator.HandleAPI().ServeHTTP(response, request)
+	for _, header := range []string{"Content-Security-Policy", "Strict-Transport-Security", "X-Content-Type-Options", "X-Frame-Options", "Permissions-Policy"} {
+		if response.Header().Get(header) == "" {
+			t.Fatalf("missing security header %s", header)
+		}
+	}
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	orchestrator := &Orchestrator{mux: http.NewServeMux()}
 	orchestrator.setupRoutes()

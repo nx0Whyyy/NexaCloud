@@ -40,6 +40,15 @@ func TestLimiter(t *testing.T) {
 	}
 }
 
+func TestRequestIPUsesProxyAppendedAddress(t *testing.T) {
+	request := httptest.NewRequest("GET", "https://cloud.nexastudio.dev/", nil)
+	request.RemoteAddr = "172.18.0.4:1234"
+	request.Header.Set("X-Forwarded-For", "198.51.100.2, 203.0.113.8")
+	if actual := requestIP(request); actual != "203.0.113.8" {
+		t.Fatalf("unexpected client IP %q", actual)
+	}
+}
+
 func TestValidOrigin(t *testing.T) {
 	request := httptest.NewRequest("POST", "https://cloud.nexastudio.dev/api/v1/auth/login", nil)
 	request.Host = "cloud.nexastudio.dev"

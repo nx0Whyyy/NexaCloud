@@ -25,9 +25,9 @@ type ResourceUsage struct {
 // Node represents a physical/virtual machine running NexaAgent.
 type Node struct {
 	ID             uuid.UUID           `json:"id" gorm:"type:uuid;primarykey"`
-	OrganizationID *uuid.UUID          `json:"organization_id,omitempty" gorm:"type:uuid;index"`
+	OrganizationID *uuid.UUID          `json:"organization_id,omitempty" gorm:"type:uuid;index;uniqueIndex:idx_nodes_org_name"`
 	NetworkID      *uuid.UUID          `json:"network_id,omitempty" gorm:"type:uuid;index"`
-	Name           string              `json:"name" gorm:"unique;size:100"`
+	Name           string              `json:"name" gorm:"size:100;uniqueIndex:idx_nodes_org_name"`
 	PublicAddress  string              `json:"public_address" gorm:"size:255"`
 	Status         NodeStatus          `json:"status" gorm:"size:20"`
 	Labels         Labels              `json:"labels" gorm:"serializer:json;type:jsonb"`
@@ -53,9 +53,9 @@ type ContainerInfo struct {
 // Service defines a logical group of instances (e.g. "skyblock", "lobby").
 type Service struct {
 	ID             uuid.UUID    `json:"id" gorm:"type:uuid;primarykey"`
-	OrganizationID *uuid.UUID   `json:"organization_id,omitempty" gorm:"type:uuid;index"`
+	OrganizationID *uuid.UUID   `json:"organization_id,omitempty" gorm:"type:uuid;index;uniqueIndex:idx_services_org_name"`
 	NetworkID      *uuid.UUID   `json:"network_id,omitempty" gorm:"type:uuid;index"`
-	Name           string       `json:"name" gorm:"unique;size:100"`
+	Name           string       `json:"name" gorm:"size:100;uniqueIndex:idx_services_org_name"`
 	Type           ServiceType  `json:"type" gorm:"size:20"`
 	Software       SoftwareSpec `json:"software" gorm:"serializer:json;type:jsonb"`
 	Resources      Resources    `json:"resources" gorm:"serializer:json;type:jsonb"`
@@ -104,9 +104,9 @@ type Placement struct {
 // Instance is a running Minecraft server container.
 type Instance struct {
 	ID             uuid.UUID       `json:"id" gorm:"type:uuid;primarykey"`
-	OrganizationID *uuid.UUID      `json:"organization_id,omitempty" gorm:"type:uuid;index"`
+	OrganizationID *uuid.UUID      `json:"organization_id,omitempty" gorm:"type:uuid;index;uniqueIndex:idx_instances_org_name"`
 	NetworkID      *uuid.UUID      `json:"network_id,omitempty" gorm:"type:uuid;index"`
-	Name           string          `json:"name" gorm:"unique;size:100"` // e.g. skyblock-03
+	Name           string          `json:"name" gorm:"size:100;uniqueIndex:idx_instances_org_name"` // e.g. skyblock-03
 	ServiceName    string          `json:"service_name" gorm:"size:100"`
 	NodeID         *uuid.UUID      `json:"node_id,omitempty" gorm:"type:uuid"`
 	Status         InstanceStatus  `json:"status" gorm:"size:20"`

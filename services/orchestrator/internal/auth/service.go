@@ -313,7 +313,7 @@ func (s *Service) currentUser(r *http.Request) (*model.User, error) {
 		return nil, err
 	}
 	var user model.User
-	if err := s.db.First(&user, "id = ?", session.UserID).Error; err != nil {
+	if err := s.db.Where("id = ? AND disabled_at IS NULL", session.UserID).First(&user).Error; err != nil {
 		return nil, err
 	}
 	return &user, nil

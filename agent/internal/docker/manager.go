@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -40,19 +41,81 @@ func (m *Manager) Console(ctx context.Context, containerID, command string) (str
 	return docker(ctx, "exec", containerID, "rcon-cli", command)
 }
 func (m *Manager) ListFiles(ctx context.Context, containerID, relative string) (string, error) {
-	return docker(ctx, "exec", containerID, "find", "/data/"+relative, "-maxdepth", "1", "-printf", "%f\t%y\n")
+	target, err := dataPath(ctx, containerID, relative)
+	if err != nil {
+		return "", err
+	}
+	out, err := docker(ctx, "exec", containerID, "find", target, "-maxdepth", "1", "-printf", "%f\t%y\n")
+	return boundedOutput(out, err)
 }
 func (m *Manager) ReadFile(ctx context.Context, containerID, relative string) (string, error) {
-	return docker(ctx, "exec", containerID, "cat", "/data/"+relative)
+	target, err := dataPath(ctx, containerID, relative)
+	if err != nil {
+		return "", err
+	}
+	out, err := docker(ctx, "exec", containerID, "head", "-c", "262145", target)
+	return boundedOutput(out, err)
 }
 func (m *Manager) WriteFile(ctx context.Context, containerID, relative, content string) (string, error) {
-	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", containerID, "tee", "/data/"+relative)
+	target, err := dataPath(ctx, containerID, relative)
+	if err != nil {
+		return "", err
+	}
+	if target == "/data" {
+		return "", fmt.Errorf("un fichier doit être sélectionné")
+	}
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", containerID, "tee", target)
 	cmd.Stdin = strings.NewReader(content)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("write file: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
+}
+
+const maxFileResult = 256 * 1024
+
+func dataPath(ctx context.Context, containerID, relative string) (string, error) {
+	target, err := cleanDataTarget(relative)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := docker(ctx, "exec", containerID, "realpath", "-m", "--", target)
+	if err != nil {
+		return "", fmt.Errorf("résolution du chemin: %w", err)
+	}
+	resolved = strings.TrimSpace(resolved)
+	if resolved != "/data" && !strings.HasPrefix(resolved, "/data/") {
+		return "", fmt.Errorf("chemin hors du volume serveur")
+	}
+	return resolved, nil
+}
+
+func cleanDataTarget(relative string) (string, error) {
+	relative = strings.TrimSpace(relative)
+	if len(relative) > 4096 || strings.ContainsAny(relative, "\x00\\") || path.IsAbs(relative) {
+		return "", fmt.Errorf("chemin de fichier invalide")
+	}
+	for _, segment := range strings.Split(relative, "/") {
+		if segment == ".." {
+			return "", fmt.Errorf("chemin de fichier invalide")
+		}
+	}
+	clean := path.Clean(relative)
+	if clean == "." || clean == "" {
+		return "/data", nil
+	}
+	return "/data/" + clean, nil
+}
+
+func boundedOutput(output string, err error) (string, error) {
+	if err != nil {
+		return "", err
+	}
+	if len(output) > maxFileResult {
+		return "", fmt.Errorf("résultat supérieur à 256 Kio")
+	}
+	return output, nil
 }
 
 func (m *Manager) List(ctx context.Context) ([]model.ContainerInfo, error) {

@@ -28,6 +28,13 @@ func newLimiter(limit int, window time.Duration) *limiter {
 func (l *limiter) allow(key string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if len(l.windows) > 4096 {
+		for candidate, entry := range l.windows {
+			if entry.reset.Before(now) {
+				delete(l.windows, candidate)
+			}
+		}
+	}
 	entry := l.windows[key]
 	if entry.reset.Before(now) {
 		entry = attemptWindow{reset: now.Add(l.window)}
@@ -69,8 +76,11 @@ func passwordPolicy(password, username, email string) string {
 }
 
 func requestIP(r *http.Request) string {
-	if value := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]); value != "" {
-		return value
+	forwarded := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(forwarded) - 1; i >= 0; i-- {
+		if value := strings.TrimSpace(forwarded[i]); net.ParseIP(value) != nil {
+			return value
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {

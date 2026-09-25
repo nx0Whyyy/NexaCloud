@@ -1,12 +1,21 @@
 package access
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nexastudio/nexacloud/pkg/model"
 )
+
+func TestClientIPUsesLastValidForwardedAddress(t *testing.T) {
+	request := httptest.NewRequest("GET", "https://cloud.nexastudio.dev/", nil)
+	request.Header.Set("X-Forwarded-For", "spoofed, 198.51.100.20")
+	if actual := clientIP(request); actual != "198.51.100.20" {
+		t.Fatalf("unexpected client IP %q", actual)
+	}
+}
 
 func TestNewLicenseKeyIsDisplayableAndHashed(t *testing.T) {
 	key, hash, err := NewLicenseKey()
