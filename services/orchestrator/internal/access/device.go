@@ -143,6 +143,7 @@ func (s *Service) claimDeviceEnrollment(w http.ResponseWriter, r *http.Request) 
 	}
 	var enrollment model.DeviceEnrollment
 	var credential model.NodeCredential
+	var agentToken string
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("device_token_hash = ? AND expires_at > ?", hashSecret(input.DeviceCode), model.Now()).First(&enrollment).Error; err != nil {
 			return err
@@ -151,6 +152,14 @@ func (s *Service) claimDeviceEnrollment(w http.ResponseWriter, r *http.Request) 
 			return nil
 		}
 		if err := tx.Where("node_id = ? AND status = ?", *enrollment.NodeID, "ACTIVE").First(&credential).Error; err != nil {
+			return err
+		}
+		var err error
+		agentToken, err = randomToken(32)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&credential).Update("secret_hash", hashSecret(agentToken)).Error; err != nil {
 			return err
 		}
 		now := model.Now()
@@ -169,7 +178,48 @@ func (s *Service) claimDeviceEnrollment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusGone, "device enrollment is no longer available")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "approved", "node_id": enrollment.NodeID, "credential_id": credential.ID, "fingerprint": credential.Fingerprint})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "approved", "node_id": enrollment.NodeID, "credential_id": credential.ID, "fingerprint": credential.Fingerprint, "agent_token": agentToken})
+}
+
+func (s *Service) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
+	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(authorization, "Bearer ") {
+		writeError(w, http.StatusUnauthorized, "agent credential required")
+		return
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer "))
+	if len(token) < 32 {
+		writeError(w, http.StatusUnauthorized, "agent credential invalid")
+		return
+	}
+	if !s.heartbeatLimit.allow("heartbeat:" + hashSecret(token)) {
+		writeError(w, http.StatusTooManyRequests, "heartbeat rate limit reached")
+		return
+	}
+	var credential model.NodeCredential
+	if err := s.db.Where("secret_hash = ? AND status = ? AND revoked_at IS NULL", hashSecret(token), "ACTIVE").First(&credential).Error; err != nil {
+		writeError(w, http.StatusUnauthorized, "agent credential invalid")
+		return
+	}
+	var heartbeat model.AgentHeartbeat
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024*1024)).Decode(&heartbeat) != nil {
+		writeError(w, http.StatusBadRequest, "heartbeat invalid")
+		return
+	}
+	now := model.Now()
+	updates := map[string]any{"status": model.NodeOnline, "usage": heartbeat.Usage, "containers": heartbeat.Containers, "minecraft": heartbeat.Minecraft, "last_heartbeat": now, "updated_at": now}
+	if heartbeat.AgentVersion != "" {
+		updates["agent_version"] = heartbeat.AgentVersion
+	}
+	if heartbeat.Resources.Memory != "" || heartbeat.Resources.CPU > 0 {
+		updates["resources"] = heartbeat.Resources
+	}
+	result := s.db.Model(&model.Node{}).Where("id = ? AND status <> ?", credential.NodeID, model.NodeRevoked).Updates(updates)
+	if result.Error != nil || result.RowsAffected == 0 {
+		writeError(w, http.StatusGone, "node revoked or unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, model.AgentHeartbeatResponse{Status: "ok", NodeID: credential.NodeID, ReceivedAt: now})
 }
 
 func (s *Service) revokeNode(resolve UserResolver) http.HandlerFunc {

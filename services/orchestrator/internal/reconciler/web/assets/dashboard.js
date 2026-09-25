@@ -130,7 +130,9 @@ function renderUserDashboard(profile, organization, access) {
     button.textContent = "Révoquer";
     button.disabled = node.status === "REVOKED";
     button.addEventListener("click", () => revokeNode(node.id, node.name));
-    return resourceRow(node.name, `${node.resources?.cpu || 0} CPU · ${node.resources?.memory || "RAM inconnue"}`, node.status, button);
+    const containers = node.containers?.length || 0;
+    const minecraft = node.minecraft ? ` · ${node.minecraft.players}/${node.minecraft.max_players} joueurs` : "";
+    return resourceRow(node.name, `${node.resources?.cpu || 0} CPU · ${node.resources?.memory || "RAM inconnue"} · ${containers} conteneur(s)${minecraft}`, node.status, button);
   }) : [emptyRow("Aucun node connecté", "Lancez NexaAgent puis approuvez son code d'activation.")]));
 
   const licenseTarget = document.querySelector("[data-licenses]");

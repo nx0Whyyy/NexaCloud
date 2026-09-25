@@ -24,19 +24,20 @@ type ResourceUsage struct {
 
 // Node represents a physical/virtual machine running NexaAgent.
 type Node struct {
-	ID             uuid.UUID       `json:"id" gorm:"type:uuid;primarykey"`
-	OrganizationID *uuid.UUID      `json:"organization_id,omitempty" gorm:"type:uuid;index"`
-	NetworkID      *uuid.UUID      `json:"network_id,omitempty" gorm:"type:uuid;index"`
-	Name           string          `json:"name" gorm:"unique;size:100"`
-	Status         NodeStatus      `json:"status" gorm:"size:20"`
-	Labels         Labels          `json:"labels" gorm:"type:jsonb"`
-	Resources      Resources       `json:"resources" gorm:"type:jsonb"`
-	Usage          ResourceUsage   `json:"usage" gorm:"type:jsonb"`
-	AgentVersion   string          `json:"agent_version"`
-	LastHeartbeat  time.Time       `json:"last_heartbeat"`
-	Containers     []ContainerInfo `json:"containers,omitempty" gorm:"-"`
-	CreatedAt      time.Time       `json:"created_at"`
-	UpdatedAt      time.Time       `json:"updated_at"`
+	ID             uuid.UUID           `json:"id" gorm:"type:uuid;primarykey"`
+	OrganizationID *uuid.UUID          `json:"organization_id,omitempty" gorm:"type:uuid;index"`
+	NetworkID      *uuid.UUID          `json:"network_id,omitempty" gorm:"type:uuid;index"`
+	Name           string              `json:"name" gorm:"unique;size:100"`
+	Status         NodeStatus          `json:"status" gorm:"size:20"`
+	Labels         Labels              `json:"labels" gorm:"type:jsonb"`
+	Resources      Resources           `json:"resources" gorm:"type:jsonb"`
+	Usage          ResourceUsage       `json:"usage" gorm:"type:jsonb"`
+	AgentVersion   string              `json:"agent_version"`
+	LastHeartbeat  time.Time           `json:"last_heartbeat"`
+	Containers     []ContainerInfo     `json:"containers,omitempty" gorm:"serializer:json;type:jsonb"`
+	Minecraft      *MinecraftTelemetry `json:"minecraft,omitempty" gorm:"serializer:json;type:jsonb"`
+	CreatedAt      time.Time           `json:"created_at"`
+	UpdatedAt      time.Time           `json:"updated_at"`
 }
 
 type Labels map[string]string

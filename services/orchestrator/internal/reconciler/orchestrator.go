@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"github.com/nexastudio/nexacloud/pkg/model"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/access"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/auth"
 	"github.com/nexastudio/nexacloud/services/orchestrator/internal/config"
@@ -116,6 +117,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 }
 
 func (o *Orchestrator) reconcile(ctx context.Context) {
+	if err := o.access.MarkStaleNodes(model.Now()); err != nil {
+		o.logger.Error("mark stale nodes failed", "error", err)
+	}
 	o.lifecycle.Reconcile(ctx)
 	o.shift.Reconcile(ctx)
 	o.crashloop.Check(ctx)

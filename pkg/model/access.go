@@ -84,6 +84,7 @@ type NodeCredential struct {
 	NodeID      uuid.UUID  `json:"node_id" gorm:"type:uuid;index;not null"`
 	PublicKey   string     `json:"public_key" gorm:"type:text;not null"`
 	Fingerprint string     `json:"fingerprint" gorm:"uniqueIndex;size:64;not null"`
+	SecretHash  string     `json:"-" gorm:"size:64;index"`
 	Status      string     `json:"status" gorm:"size:20;not null"`
 	CreatedAt   time.Time  `json:"created_at"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`

@@ -26,13 +26,14 @@ type Entitlements struct {
 }
 
 type Service struct {
-	db          *gorm.DB
-	deviceLimit *rateLimiter
-	enrollLimit *rateLimiter
+	db             *gorm.DB
+	deviceLimit    *rateLimiter
+	enrollLimit    *rateLimiter
+	heartbeatLimit *rateLimiter
 }
 
 func New(db *gorm.DB) *Service {
-	return &Service{db: db, deviceLimit: newRateLimiter(20, time.Hour), enrollLimit: newRateLimiter(10, time.Hour)}
+	return &Service{db: db, deviceLimit: newRateLimiter(20, time.Hour), enrollLimit: newRateLimiter(10, time.Hour), heartbeatLimit: newRateLimiter(500, time.Hour)}
 }
 
 func (s *Service) Migrate() error {
@@ -205,6 +206,10 @@ func (s *Service) ReserveInstanceSlot(orgID, instanceID uuid.UUID) error {
 
 func (s *Service) ReleaseInstanceSlot(instanceID uuid.UUID) error {
 	return s.db.Delete(&model.InstanceSlot{}, "instance_id = ?", instanceID).Error
+}
+
+func (s *Service) MarkStaleNodes(now time.Time) error {
+	return s.db.Model(&model.Node{}).Where("status = ? AND last_heartbeat < ?", model.NodeOnline, now.Add(-45*time.Second)).Update("status", model.NodeOffline).Error
 }
 
 func NewLicenseKey() (string, string, error) {

@@ -2,14 +2,41 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os/exec"
 	"strings"
+
+	"github.com/nexastudio/nexacloud/pkg/model"
 )
 
 type Manager struct {
 	logger *slog.Logger
+}
+
+func (m *Manager) List(ctx context.Context) ([]model.ContainerInfo, error) {
+	out, err := docker(ctx, "ps", "-a", "--format", "{{json .}}")
+	if err != nil {
+		return nil, err
+	}
+	var containers []model.ContainerInfo
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		var row struct {
+			ID    string
+			Names string
+			Image string
+			State string
+		}
+		if err := json.Unmarshal([]byte(line), &row); err != nil {
+			return nil, err
+		}
+		containers = append(containers, model.ContainerInfo{ID: row.ID, Name: row.Names, Image: row.Image, State: row.State})
+	}
+	return containers, nil
 }
 
 func New(logger *slog.Logger) *Manager {
@@ -44,6 +71,17 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (string, error
 	out, err := docker(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("container create: %w", err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+func (m *Manager) CreateMinecraft(ctx context.Context, name string, port int, memory string) (string, error) {
+	containerName := "nexacloud-" + name
+	volumeName := containerName + "-data"
+	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped", "-p", fmt.Sprintf("%d:25565", port), "-e", "EULA=TRUE", "-e", "TYPE=PAPER", "-e", "MEMORY=" + memory, "-v", volumeName + ":/data", "itzg/minecraft-server:java21"}
+	out, err := docker(ctx, args...)
+	if err != nil {
+		return "", fmt.Errorf("minecraft container: %w", err)
 	}
 	return strings.TrimSpace(out), nil
 }
