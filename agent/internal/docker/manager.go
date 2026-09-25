@@ -151,10 +151,10 @@ func installNexaLink(ctx context.Context, containerID string) error {
 	}
 	defer os.RemoveAll(root)
 	plugins := filepath.Join(root, "plugins")
-	if err := os.Mkdir(plugins, 0700); err != nil {
+	if err := os.Mkdir(plugins, 0755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(plugins, "NexaLink.jar"), nexalinkplugin.JAR, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(plugins, "NexaLink.jar"), nexalinkplugin.JAR, 0644); err != nil {
 		return err
 	}
 	if _, err := docker(ctx, "cp", plugins, containerID+":/data/"); err != nil {
