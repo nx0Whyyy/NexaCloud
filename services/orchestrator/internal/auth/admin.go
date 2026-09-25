@@ -41,6 +41,10 @@ func (s *Service) updateUserRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "utilisateur introuvable")
 		return
 	}
+	if !canManageRole(actor.Role, target.Role, input.Role) {
+		writeError(w, http.StatusForbidden, "seul un propriétaire peut gérer le rôle Owner")
+		return
+	}
 	previous := target.Role
 	if err := s.db.Model(&target).Updates(map[string]any{"role": input.Role, "updated_at": model.Now()}).Error; err != nil {
 		writeError(w, http.StatusInternalServerError, "mise à jour impossible")
@@ -49,4 +53,11 @@ func (s *Service) updateUserRole(w http.ResponseWriter, r *http.Request) {
 	_ = s.db.Create(&model.AuditEntry{ID: model.NewID(), Actor: actor.ID.String(), Action: "USER_ROLE_UPDATE", ResourceType: "user", ResourceID: target.ID.String(), IPAddress: requestIP(r), Result: "success", Details: model.JSON(map[string]string{"previous": previous, "current": input.Role}), CreatedAt: model.Now()}).Error
 	target.Role = input.Role
 	writeJSON(w, http.StatusOK, target)
+}
+
+func canManageRole(actorRole, targetRole, nextRole string) bool {
+	if actorRole == "owner" {
+		return true
+	}
+	return actorRole == "admin" && targetRole != "owner" && nextRole != "owner"
 }

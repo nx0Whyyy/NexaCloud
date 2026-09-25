@@ -57,3 +57,15 @@ func TestValidOrigin(t *testing.T) {
 		t.Fatal("cross-site browser request without origin should be rejected")
 	}
 }
+
+func TestRoleHierarchy(t *testing.T) {
+	if canManageRole("admin", "user", "owner") || canManageRole("admin", "owner", "user") {
+		t.Fatal("admins must not create or modify owners")
+	}
+	if !canManageRole("admin", "user", "moderator") {
+		t.Fatal("admins should manage non-owner roles")
+	}
+	if !canManageRole("owner", "owner", "admin") {
+		t.Fatal("owners should manage every role")
+	}
+}

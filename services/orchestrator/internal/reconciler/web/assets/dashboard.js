@@ -76,6 +76,16 @@ function renderUserDashboard(profile, organization, access) {
   setText("[data-org-name]", org.name);
   setText("[data-org-slug]", org.slug);
   setText("[data-role]", role.replaceAll("_", " "));
+  const globalRole = profile.role || "user";
+  const privileged = ["support", "moderator", "admin", "owner"].includes(globalRole);
+  const owner = globalRole === "owner";
+  setText("[data-global-role]", globalRole === "user" ? "Utilisateur" : globalRole);
+  setText("[data-account-email]", profile.email);
+  setText("[data-email-state]", profile.email_verified_at ? "Adresse vérifiée" : "Vérification requise");
+  setText("[data-role-scope]", owner ? "Toutes les permissions plateforme" : privileged ? "Accès à la console staff" : "Accès à votre organisation");
+  document.querySelectorAll("[data-staff-link]").forEach((link) => { link.hidden = !privileged; });
+  const ownerStrip = document.querySelector("[data-owner-strip]");
+  if (ownerStrip) ownerStrip.hidden = !owner;
   setText("[data-plan]", access.plan?.name || "Free");
   setText("[data-subscription-status]", access.subscription.status);
   Object.entries({ networks: networks.length, nodes: nodes.filter((node) => node.status !== "REVOKED").length, services: services.length, instances: instances.length }).forEach(([key, value]) => setText(`[data-count="${key}"]`, value));
@@ -93,6 +103,13 @@ function renderUserDashboard(profile, organization, access) {
   setText("[data-setup-progress]", `${completed.filter(Boolean).length} / 3`);
   ["network", "license", "node"].forEach((step, index) => document.querySelector(`[data-step="${step}"]`)?.classList.toggle("complete", completed[index]));
   document.querySelector("[data-onboarding]")?.classList.toggle("is-complete", completed.every(Boolean));
+  setText("[data-network-summary]", networks.length ? `${networks.length} réseau(x) actif(s)` : "Créez votre premier réseau");
+  setText("[data-network-state]", networks.length ? "Opérationnel" : "À configurer");
+  const activeNodes = nodes.filter((node) => ["ONLINE", "READY", "ACTIVE"].includes(node.status)).length;
+  setText("[data-node-summary]", nodes.length ? `${activeNodes} en ligne sur ${nodes.length}` : "En attente de connexion");
+  setText("[data-node-state]", activeNodes ? "Connecté" : "À configurer");
+  document.querySelector('[data-signal="network"]')?.toggleAttribute("data-warning", !networks.length);
+  document.querySelector('[data-signal="nodes"]')?.toggleAttribute("data-warning", !activeNodes);
 
   const networkTarget = document.querySelector("[data-networks]");
   networkTarget.replaceChildren(...(networks.length ? networks.map((network) => resourceRow(network.name, `ID ${network.id.slice(0, 8)} · ${nodes.filter((node) => node.network_id === network.id).length} node(s)`, network.status)) : [emptyRow("Aucun réseau", "Créez votre premier périmètre Minecraft pour commencer.")]));
@@ -205,8 +222,12 @@ async function loadStaffDashboard() {
     const row = document.createElement("div"); row.className = "user-row";
     const username = document.createElement("strong"); username.textContent = user.username;
     const email = document.createElement("span"); email.textContent = user.email;
-    const role = document.createElement("select"); role.className = "role-select"; role.disabled = !canManageRoles || user.id === data.user.id;
-    ["user", "support", "moderator", "admin", "owner"].forEach((value) => role.append(new Option(value, value, false, user.role === value)));
+    const role = document.createElement("select"); role.className = "role-select";
+    const targetIsOwner = user.role === "owner";
+    role.disabled = !canManageRoles || user.id === data.user.id || (targetIsOwner && data.user.role !== "owner");
+    const roles = data.user.role === "owner" ? ["user", "support", "moderator", "admin", "owner"] : ["user", "support", "moderator", "admin"];
+    if (targetIsOwner && !roles.includes("owner")) roles.push("owner");
+    roles.forEach((value) => role.append(new Option(value, value, false, user.role === value)));
     role.addEventListener("change", async () => {
       const previous = user.role;
       try { await request(`/api/v1/staff/users/${user.id}/role`, { method: "PATCH", body: JSON.stringify({ role: role.value }) }); user.role = role.value; }
