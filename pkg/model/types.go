@@ -29,9 +29,9 @@ type Node struct {
 	NetworkID      *uuid.UUID          `json:"network_id,omitempty" gorm:"type:uuid;index"`
 	Name           string              `json:"name" gorm:"unique;size:100"`
 	Status         NodeStatus          `json:"status" gorm:"size:20"`
-	Labels         Labels              `json:"labels" gorm:"type:jsonb"`
-	Resources      Resources           `json:"resources" gorm:"type:jsonb"`
-	Usage          ResourceUsage       `json:"usage" gorm:"type:jsonb"`
+	Labels         Labels              `json:"labels" gorm:"serializer:json;type:jsonb"`
+	Resources      Resources           `json:"resources" gorm:"serializer:json;type:jsonb"`
+	Usage          ResourceUsage       `json:"usage" gorm:"serializer:json;type:jsonb"`
 	AgentVersion   string              `json:"agent_version"`
 	LastHeartbeat  time.Time           `json:"last_heartbeat"`
 	Containers     []ContainerInfo     `json:"containers,omitempty" gorm:"serializer:json;type:jsonb"`
@@ -56,10 +56,10 @@ type Service struct {
 	NetworkID      *uuid.UUID   `json:"network_id,omitempty" gorm:"type:uuid;index"`
 	Name           string       `json:"name" gorm:"unique;size:100"`
 	Type           ServiceType  `json:"type" gorm:"size:20"`
-	Software       SoftwareSpec `json:"software" gorm:"type:jsonb"`
-	Resources      Resources    `json:"resources" gorm:"type:jsonb"`
-	Autoscaling    *Autoscaling `json:"autoscaling,omitempty" gorm:"type:jsonb"`
-	Placement      *Placement   `json:"placement,omitempty" gorm:"type:jsonb"`
+	Software       SoftwareSpec `json:"software" gorm:"serializer:json;type:jsonb"`
+	Resources      Resources    `json:"resources" gorm:"serializer:json;type:jsonb"`
+	Autoscaling    *Autoscaling `json:"autoscaling,omitempty" gorm:"serializer:json;type:jsonb"`
+	Placement      *Placement   `json:"placement,omitempty" gorm:"serializer:json;type:jsonb"`
 	Dependencies   []string     `json:"dependencies,omitempty" gorm:"type:text[]"`
 	ConfigTemplate string       `json:"config_template,omitempty"`
 	BlueprintID    *uuid.UUID   `json:"blueprint_id,omitempty"`
@@ -113,9 +113,9 @@ type Instance struct {
 	ContainerID    string          `json:"container_id,omitempty"`
 	Address        string          `json:"address,omitempty"` // internal IP:port
 	Port           int             `json:"port,omitempty"`
-	Resources      Resources       `json:"resources" gorm:"type:jsonb"`
-	Metadata       InstanceMeta    `json:"metadata" gorm:"type:jsonb"`
-	Health         *InstanceHealth `json:"health,omitempty" gorm:"type:jsonb"`
+	Resources      Resources       `json:"resources" gorm:"serializer:json;type:jsonb"`
+	Metadata       InstanceMeta    `json:"metadata" gorm:"serializer:json;type:jsonb"`
+	Health         *InstanceHealth `json:"health,omitempty" gorm:"serializer:json;type:jsonb"`
 	PlayerCount    int             `json:"player_count"`
 	Version        string          `json:"version,omitempty"` // software version
 	Plugins        []string        `json:"plugins,omitempty" gorm:"type:text[]"`

@@ -97,7 +97,7 @@ type DeviceEnrollment struct {
 	DeviceTokenHash string     `json:"-" gorm:"uniqueIndex;size:64;not null"`
 	NodeName        string     `json:"node_name" gorm:"size:100;not null"`
 	PublicKey       string     `json:"-" gorm:"type:text;not null"`
-	Resources       Resources  `json:"resources" gorm:"type:jsonb"`
+	Resources       Resources  `json:"resources" gorm:"serializer:json;type:jsonb"`
 	Status          string     `json:"status" gorm:"size:20;not null"`
 	NodeID          *uuid.UUID `json:"node_id,omitempty" gorm:"type:uuid"`
 	CreatedAt       time.Time  `json:"created_at"`
