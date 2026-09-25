@@ -86,6 +86,13 @@ function renderUserDashboard(profile, organization, access) {
   document.querySelectorAll("[data-staff-link]").forEach((link) => { link.hidden = !privileged; });
   const ownerStrip = document.querySelector("[data-owner-strip]");
   if (ownerStrip) ownerStrip.hidden = !owner;
+  const monogram = profile.username.slice(0, 2).toUpperCase();
+  setText("[data-profile-monogram]", monogram);
+  const profileForm = document.querySelector("[data-profile-form]");
+  if (profileForm) {
+    profileForm.elements.username.value = profile.username;
+    profileForm.elements.email.value = profile.email;
+  }
   setText("[data-plan]", access.plan?.name || "Free");
   setText("[data-subscription-status]", access.subscription.status);
   Object.entries({ networks: networks.length, nodes: nodes.filter((node) => node.status !== "REVOKED").length, services: services.length, instances: instances.length }).forEach(([key, value]) => setText(`[data-count="${key}"]`, value));
@@ -95,8 +102,10 @@ function renderUserDashboard(profile, organization, access) {
   const active = usage.active_instances || 0;
   const max = limits.max_active_instances || 0;
   const bar = document.querySelector("[data-usage-bar]");
-  bar.max = Math.max(max, 1);
-  bar.value = active;
+  if (bar) {
+    bar.max = Math.max(max, 1);
+    bar.value = active;
+  }
   setText("[data-usage-message]", max && active / max >= .8 ? "Vous approchez de votre limite d'instances." : "Votre capacité est disponible.");
 
   const completed = [networks.length > 0, licenses.length > 0, nodes.length > 0];
@@ -112,10 +121,10 @@ function renderUserDashboard(profile, organization, access) {
   document.querySelector('[data-signal="nodes"]')?.toggleAttribute("data-warning", !activeNodes);
 
   const networkTarget = document.querySelector("[data-networks]");
-  networkTarget.replaceChildren(...(networks.length ? networks.map((network) => resourceRow(network.name, `ID ${network.id.slice(0, 8)} · ${nodes.filter((node) => node.network_id === network.id).length} node(s)`, network.status)) : [emptyRow("Aucun réseau", "Créez votre premier périmètre Minecraft pour commencer.")]));
+  networkTarget?.replaceChildren(...(networks.length ? networks.map((network) => resourceRow(network.name, `ID ${network.id.slice(0, 8)} · ${nodes.filter((node) => node.network_id === network.id).length} node(s)`, network.status)) : [emptyRow("Aucun réseau", "Créez votre premier périmètre Minecraft pour commencer.")]));
 
   const nodeTarget = document.querySelector("[data-nodes]");
-  nodeTarget.replaceChildren(...(nodes.length ? nodes.map((node) => {
+  nodeTarget?.replaceChildren(...(nodes.length ? nodes.map((node) => {
     const button = document.createElement("button");
     button.className = "row-action";
     button.textContent = "Révoquer";
@@ -125,7 +134,7 @@ function renderUserDashboard(profile, organization, access) {
   }) : [emptyRow("Aucun node connecté", "Lancez NexaAgent puis approuvez son code d'activation.")]));
 
   const licenseTarget = document.querySelector("[data-licenses]");
-  licenseTarget.replaceChildren(...(licenses.length ? licenses.map((license) => {
+  licenseTarget?.replaceChildren(...(licenses.length ? licenses.map((license) => {
     const button = document.createElement("button");
     button.className = "row-action";
     button.textContent = "Révoquer";
@@ -135,8 +144,10 @@ function renderUserDashboard(profile, organization, access) {
   }) : [emptyRow("Aucune licence", "Générez une clé d'enregistrement pour une installation manuelle.")]));
 
   const select = document.querySelector("[data-network-select]");
-  select.replaceChildren(...networks.map((network) => new Option(network.name, network.id)));
-  if (!networks.length) select.append(new Option("Créez d'abord un réseau", ""));
+  if (select) {
+    select.replaceChildren(...networks.map((network) => new Option(network.name, network.id)));
+    if (!networks.length) select.append(new Option("Créez d'abord un réseau", ""));
+  }
   renderActivity(activity);
 }
 
@@ -154,6 +165,7 @@ async function refreshUserDashboard(message) {
 
 function showToast(message) {
   const toast = document.querySelector("[data-toast]");
+  if (!toast) return;
   toast.textContent = message;
   toast.classList.add("visible");
   window.setTimeout(() => toast.classList.remove("visible"), 2800);
@@ -207,6 +219,32 @@ function bindUserActions() {
     try {
       await request("/api/v1/device/approve", { method: "POST", body: JSON.stringify(values) });
       form.closest("dialog").close(); form.reset(); await refreshUserDashboard("Node autorisé");
+    } catch (error) { message.textContent = error.message; }
+  });
+
+  document.querySelector("[data-profile-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const message = form.querySelector("[data-profile-message]");
+    message.textContent = "";
+    try {
+      const profile = await request("/api/v1/auth/profile", { method: "PATCH", body: JSON.stringify({ username: form.elements.username.value }) });
+      setText("[data-username]", profile.username);
+      setText("[data-profile-monogram]", profile.username.slice(0, 2).toUpperCase());
+      showToast("Profil mis à jour");
+    } catch (error) { message.textContent = error.message; }
+  });
+
+  document.querySelector("[data-password-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const message = form.querySelector("[data-password-message]");
+    message.textContent = "";
+    const values = Object.fromEntries(new FormData(form));
+    try {
+      await request("/api/v1/auth/password", { method: "POST", body: JSON.stringify(values) });
+      form.reset();
+      showToast("Mot de passe modifié · autres sessions déconnectées");
     } catch (error) { message.textContent = error.message; }
   });
 }

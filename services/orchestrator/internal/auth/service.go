@@ -95,6 +95,8 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/auth/verify", s.verifyEmail)
 	mux.HandleFunc("POST /api/v1/auth/resend-verification", s.resendVerification)
 	mux.HandleFunc("GET /api/v1/auth/me", s.me)
+	mux.HandleFunc("PATCH /api/v1/auth/profile", s.updateProfile)
+	mux.HandleFunc("POST /api/v1/auth/password", s.changePassword)
 	mux.HandleFunc("GET /api/v1/dashboard", s.dashboard)
 	mux.HandleFunc("GET /api/v1/staff/overview", s.staffOverview)
 	mux.HandleFunc("PATCH /api/v1/staff/users/{id}/role", s.updateUserRole)
