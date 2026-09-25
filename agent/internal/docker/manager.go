@@ -160,6 +160,9 @@ func installNexaLink(ctx context.Context, containerID string) error {
 	if _, err := docker(ctx, "cp", plugins, containerID+":/data/"); err != nil {
 		return fmt.Errorf("install NexaLink: %w", err)
 	}
+	if _, err := docker(ctx, "run", "--rm", "--volumes-from", containerID, "alpine:3.20", "chown", "-R", "1000:1000", "/data/plugins"); err != nil {
+		return fmt.Errorf("prepare NexaLink data directory: %w", err)
+	}
 	return nil
 }
 
