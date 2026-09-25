@@ -250,21 +250,8 @@ async function revokeNode(id, name) {
 
 function bindUserActions() {
 	const deviceForm = document.querySelector("[data-device-form]");
-	if (deviceForm && !deviceForm.elements.public_address) {
-		const header = deviceForm.querySelector("header");
-		const nameLabel = document.createElement("label");
-		nameLabel.innerHTML = 'Nom du node<input name="node_name" value="minecraft-01" pattern="[A-Za-z0-9._-]+" maxlength="64" required>';
-		const install = document.createElement("div"); install.className = "install-command";
-		install.innerHTML = '<code data-agent-command></code><button type="button" data-copy-agent>Copier</button>';
-		const ipLabel = document.createElement("label");
-		ipLabel.innerHTML = 'IP publique du serveur<input name="public_address" inputmode="decimal" placeholder="203.0.113.10" required>';
-		header.after(nameLabel, install);
-		deviceForm.querySelector('label:has(input[name="code"])').after(ipLabel);
-		const refreshCommand = () => { const name = deviceForm.elements.node_name.value || "minecraft-01"; install.querySelector("code").textContent = `curl -fsSL https://cloud.nexastudio.dev/install/nexa-agent.sh | sudo sh -s -- ${name}`; };
-		deviceForm.elements.node_name.addEventListener("input", refreshCommand); refreshCommand();
-		install.querySelector("button").addEventListener("click", async () => { await navigator.clipboard.writeText(install.querySelector("code").textContent); showToast("Commande copiée"); });
-	}
-  document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => document.getElementById(button.dataset.open).showModal()));
+	if (deviceForm) setupNodeWizard(deviceForm);
+  document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => { const dialog=document.getElementById(button.dataset.open); if(dialog.id==="device-dialog")setNodeWizardStep(deviceForm,1); dialog.showModal(); }));
   document.querySelectorAll("[data-close-parent]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
   document.querySelectorAll("[data-create-license]").forEach((button) => button.addEventListener("click", createLicense));
   document.querySelector("[data-close-dialog]")?.addEventListener("click", () => document.querySelector("#license-dialog").close());
@@ -321,6 +308,33 @@ function bindUserActions() {
     } catch (error) { message.textContent = error.message; }
   });
   document.querySelector("[data-server-form]")?.addEventListener("submit", async (event) => { event.preventDefault(); const form=event.currentTarget; const message=form.querySelector("[data-server-message]"); message.textContent=""; try{const values=Object.fromEntries(new FormData(form));values.port=Number(values.port);await request("/api/v1/servers",{method:"POST",body:JSON.stringify(values)});form.closest("dialog").close();form.reset();showToast("Création envoyée au node");await loadUserDashboard();}catch(error){message.textContent=error.message;} });
+}
+
+function setupNodeWizard(form) {
+  form.innerHTML = `<header><div><span>Installation guidée</span><h2>Ajouter un node</h2></div><button type="button" data-close-parent aria-label="Fermer">×</button></header>
+    <div class="wizard-progress" aria-label="Progression"><span data-wizard-marker="1">01 <b>Configuration</b></span><span data-wizard-marker="2">02 <b>Installation</b></span><span data-wizard-marker="3">03 <b>Activation</b></span></div>
+    <section class="wizard-step" data-wizard-step="1"><label>Nom du node<input name="node_name" value="minecraft-01" pattern="[A-Za-z0-9._-]+" maxlength="64" required></label><label>IP publique du serveur<input name="public_address" inputmode="decimal" placeholder="203.0.113.10" required></label><label>Réseau<select name="network_id" data-network-select required></select></label><p class="dialog-message" data-step-message></p><footer><button type="button" data-close-parent class="button dashboard-button">Annuler</button><button type="button" class="button button-primary" data-wizard-next="2">Continuer</button></footer></section>
+    <section class="wizard-step" data-wizard-step="2" hidden><div class="wizard-terminal"><div><i></i><i></i><i></i><span>root@node</span></div><code data-agent-command></code></div><button type="button" class="button dashboard-button" data-copy-agent>Copier la commande</button><p class="wizard-note">Le terminal affichera « Installation terminée » puis votre code NexaAgent.</p><footer><button type="button" class="button dashboard-button" data-wizard-back="1">Retour</button><button type="button" class="button button-primary" data-wizard-next="3">J'ai lancé la commande</button></footer></section>
+    <section class="wizard-step" data-wizard-step="3" hidden><div class="activation-signal"><i></i><div><strong>En attente du code</strong><span>Le code reste valide pendant 10 minutes.</span></div></div><label>Code NexaAgent<input name="code" autocomplete="off" pattern="NXA-[A-Za-z0-9]{3}-[A-Za-z0-9]{3}" placeholder="NXA-ABC-123" required></label><p class="dialog-message" data-device-message></p><footer><button type="button" class="button dashboard-button" data-wizard-back="2">Retour</button><button type="submit" class="button button-primary">Activer le node</button></footer></section>`;
+  const refreshCommand = () => { const name=form.elements.node_name.value || "minecraft-01"; form.querySelector("[data-agent-command]").textContent=`curl -fsSL https://cloud.nexastudio.dev/install/nexa-agent.sh | sudo sh -s -- ${name}`; };
+  form.elements.node_name.addEventListener("input",refreshCommand); refreshCommand();
+  form.querySelectorAll("[data-wizard-next]").forEach((button)=>button.addEventListener("click",()=>{if(button.dataset.wizardNext==="2"&&!validateNodeSetup(form))return;setNodeWizardStep(form,Number(button.dataset.wizardNext));}));
+  form.querySelectorAll("[data-wizard-back]").forEach((button)=>button.addEventListener("click",()=>setNodeWizardStep(form,Number(button.dataset.wizardBack))));
+  form.querySelector("[data-copy-agent]").addEventListener("click",async()=>{await navigator.clipboard.writeText(form.querySelector("[data-agent-command]").textContent);showToast("Commande copiée");});
+}
+
+function setNodeWizardStep(form, step) {
+  if (!form) return;
+  form.querySelectorAll("[data-wizard-step]").forEach((panel)=>panel.hidden=Number(panel.dataset.wizardStep)!==step);
+  form.querySelectorAll("[data-wizard-marker]").forEach((marker)=>{const value=Number(marker.dataset.wizardMarker);marker.classList.toggle("active",value===step);marker.classList.toggle("complete",value<step);});
+}
+
+function validateNodeSetup(form) {
+  const fields=[form.elements.node_name,form.elements.public_address,form.elements.network_id];
+  if(fields.some((field)=>!field.reportValidity()))return false;
+  const parts=form.elements.public_address.value.split(".").map(Number);
+  if(parts.length!==4||parts.some((part)=>!Number.isInteger(part)||part<0||part>255)){form.querySelector("[data-step-message]").textContent="Saisissez une adresse IPv4 valide.";return false;}
+  form.querySelector("[data-step-message]").textContent="";return true;
 }
 
 async function loadStaffDashboard() {

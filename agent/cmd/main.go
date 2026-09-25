@@ -105,7 +105,7 @@ func register(ctx context.Context, cfg *config.Config, client *api.Client) error
 		return err
 	}
 	fmt.Printf("\n============================================================\n")
-	fmt.Printf(" NEXAAGENT INSTALLE - ACTIVATION REQUISE\n")
+	fmt.Printf(" INSTALLATION TERMINEE - VOICI LE CODE NEXAAGENT\n")
 	fmt.Printf("\n CODE D'ACTIVATION : %s\n", authorization.UserCode)
 	fmt.Printf(" DASHBOARD         : %s/dashboard/infrastructure\n", cfg.ControlPlaneURL)
 	fmt.Printf(" EXPIRATION        : %d minutes\n", authorization.ExpiresIn/60)
