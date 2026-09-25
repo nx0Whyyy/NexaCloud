@@ -1,0 +1,13 @@
+name: NexaLink
+version: 1.0.0
+main: dev.nexastudio.nexalink.NexaLinkPlugin
+api-version: '1.21'
+author: NexaStudio
+description: Secure bridge between Minecraft and NexaCloud.
+commands:
+  nexalink:
+    description: Displays the NexaLink connection state.
+    permission: nexalink.status
+permissions:
+  nexalink.status:
+    default: op

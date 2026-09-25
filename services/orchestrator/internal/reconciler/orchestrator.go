@@ -132,6 +132,12 @@ func (o *Orchestrator) setupRoutes() {
 	}
 
 	o.mux.Handle("/assets/", http.FileServer(http.FS(staticFiles)))
+	o.mux.HandleFunc("GET /install/nexa-agent.sh", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+		w.Header().Set("Content-Disposition", "inline; filename=nexa-agent.sh")
+		w.Header().Set("Cache-Control", "no-store")
+		http.ServeFileFS(w, r, staticFiles, "install-nexa-agent.sh")
+	})
 	o.mux.HandleFunc("/healthz", o.handleHealth)
 	o.mux.HandleFunc("/api/v1/platform", o.handlePlatform)
 	if o.auth != nil {

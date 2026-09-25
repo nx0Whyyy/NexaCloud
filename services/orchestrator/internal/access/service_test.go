@@ -52,3 +52,16 @@ func TestDeviceCodesAreDisplayableAndOpaque(t *testing.T) {
 		t.Fatal("device polling token must be high entropy and stored hashed")
 	}
 }
+
+func TestValidNodeAddress(t *testing.T) {
+	for _, address := range []string{"141.11.165.20", "2001:db8::20", "10.0.0.12"} {
+		if !validNodeAddress(address) {
+			t.Fatalf("expected %s to be accepted", address)
+		}
+	}
+	for _, address := range []string{"", "cloud.example.com", "127.0.0.1", "0.0.0.0", "224.0.0.1"} {
+		if validNodeAddress(address) {
+			t.Fatalf("expected %s to be rejected", address)
+		}
+	}
+}

@@ -203,6 +203,8 @@ func executeCommand(ctx context.Context, command *model.AgentCommand, logger *sl
 		return manager.Logs(ctx, container, 300)
 	case "CONSOLE":
 		return manager.Console(ctx, container, command.Params["command"])
+	case "REPAIR_NEXALINK":
+		return manager.RepairNexaLink(ctx, container)
 	case "FILE_LIST":
 		return manager.ListFiles(ctx, container, command.Params["path"])
 	case "FILE_READ":

@@ -3,7 +3,7 @@ package access
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
+	"net"
 	"net/http"
 	"path"
 	"regexp"
@@ -70,6 +70,10 @@ func (s *Service) createServer(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusConflict, "node indisponible")
 			return
 		}
+		if net.ParseIP(node.PublicAddress) == nil {
+			writeError(w, http.StatusConflict, "configurez l'adresse IP publique du node")
+			return
+		}
 		var used int64
 		s.db.Model(&model.Instance{}).Where("node_id = ? AND port = ?", node.ID, input.Port).Count(&used)
 		if used > 0 {
@@ -82,7 +86,7 @@ func (s *Service) createServer(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
-		instance := model.Instance{ID: instanceID, OrganizationID: &org.ID, NetworkID: node.NetworkID, Name: input.Name, ServiceName: "managed", NodeID: &node.ID, Status: model.InstanceCreating, Pulse: model.PulseOffline, Port: input.Port, Address: fmt.Sprintf("%s:%d", node.Name, input.Port), Resources: model.Resources{Memory: input.Memory}, Metadata: model.InstanceMeta{Software: model.SoftwareSpec{Type: model.SoftwarePaper, Version: "latest", Java: model.JavaSpec{Version: 25}}}, CreatedAt: now, UpdatedAt: now}
+		instance := model.Instance{ID: instanceID, OrganizationID: &org.ID, NetworkID: node.NetworkID, Name: input.Name, ServiceName: "managed", NodeID: &node.ID, Status: model.InstanceCreating, Pulse: model.PulseOffline, Port: input.Port, Address: net.JoinHostPort(node.PublicAddress, strconv.Itoa(input.Port)), Resources: model.Resources{Memory: input.Memory}, Metadata: model.InstanceMeta{Software: model.SoftwareSpec{Type: model.SoftwarePaper, Version: "latest", Java: model.JavaSpec{Version: 25}}}, CreatedAt: now, UpdatedAt: now}
 		command := model.AgentCommand{ID: model.NewID(), OrganizationID: org.ID, NodeID: node.ID, InstanceID: &instance.ID, Command: "CREATE_SERVER", Status: "PENDING", Params: map[string]string{"name": "server-" + instance.ID.String()[:8], "port": strconv.Itoa(input.Port), "memory": input.Memory}, CreatedAt: now}
 		if err := s.db.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Create(&instance).Error; err != nil {
@@ -120,7 +124,7 @@ func (s *Service) serverAction(resolve UserResolver) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, "requête invalide")
 			return
 		}
-		commands := map[string]string{"start": "START_SERVER", "stop": "STOP_SERVER", "restart": "RESTART_SERVER", "kill": "KILL_SERVER", "delete": "DELETE_SERVER", "logs": "SERVER_LOGS"}
+		commands := map[string]string{"start": "START_SERVER", "stop": "STOP_SERVER", "restart": "RESTART_SERVER", "kill": "KILL_SERVER", "delete": "DELETE_SERVER", "logs": "SERVER_LOGS", "repair-link": "REPAIR_NEXALINK"}
 		commandName, exists := commands[strings.ToLower(input.Action)]
 		if !exists {
 			writeError(w, http.StatusBadRequest, "action invalide")
@@ -252,7 +256,7 @@ func (s *Service) nextAgentCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	var command model.AgentCommand
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		stale := model.Now().Add(-2 * time.Minute)
+		stale := model.Now().Add(-5 * time.Minute)
 		query := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("node_id = ? AND (status = ? OR (status = ? AND claimed_at < ?))", credential.NodeID, "PENDING", "RUNNING", stale).Order("created_at").Limit(1).Find(&command)
 		if query.Error != nil {
 			return query.Error

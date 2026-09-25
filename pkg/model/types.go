@@ -28,6 +28,7 @@ type Node struct {
 	OrganizationID *uuid.UUID          `json:"organization_id,omitempty" gorm:"type:uuid;index"`
 	NetworkID      *uuid.UUID          `json:"network_id,omitempty" gorm:"type:uuid;index"`
 	Name           string              `json:"name" gorm:"unique;size:100"`
+	PublicAddress  string              `json:"public_address" gorm:"size:255"`
 	Status         NodeStatus          `json:"status" gorm:"size:20"`
 	Labels         Labels              `json:"labels" gorm:"serializer:json;type:jsonb"`
 	Resources      Resources           `json:"resources" gorm:"serializer:json;type:jsonb"`

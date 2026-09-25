@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -77,11 +78,17 @@ func (s *Service) approveDeviceEnrollment(resolve UserResolver) http.HandlerFunc
 			return
 		}
 		var input struct {
-			Code      string    `json:"code"`
-			NetworkID uuid.UUID `json:"network_id"`
+			Code          string    `json:"code"`
+			NetworkID     uuid.UUID `json:"network_id"`
+			PublicAddress string    `json:"public_address"`
 		}
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input) != nil || input.Code == "" || input.NetworkID == uuid.Nil {
-			writeError(w, http.StatusBadRequest, "code and network_id are required")
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input) != nil {
+			writeError(w, http.StatusBadRequest, "invalid enrollment request")
+			return
+		}
+		input.PublicAddress = strings.TrimSpace(input.PublicAddress)
+		if input.Code == "" || input.NetworkID == uuid.Nil || !validNodeAddress(input.PublicAddress) {
+			writeError(w, http.StatusBadRequest, "code, network_id and a valid server IP are required")
 			return
 		}
 		var node model.Node
@@ -110,7 +117,7 @@ func (s *Service) approveDeviceEnrollment(resolve UserResolver) http.HandlerFunc
 				return errors.New("node quota reached")
 			}
 			now := model.Now()
-			node = model.Node{ID: model.NewID(), OrganizationID: &org.ID, NetworkID: &network.ID, Name: enrollment.NodeName, Status: model.NodeOffline, Labels: model.Labels{}, Resources: enrollment.Resources, CreatedAt: now, UpdatedAt: now}
+			node = model.Node{ID: model.NewID(), OrganizationID: &org.ID, NetworkID: &network.ID, Name: enrollment.NodeName, PublicAddress: input.PublicAddress, Status: model.NodeOffline, Labels: model.Labels{}, Resources: enrollment.Resources, CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&node).Error; err != nil {
 				return err
 			}
@@ -131,6 +138,11 @@ func (s *Service) approveDeviceEnrollment(resolve UserResolver) http.HandlerFunc
 		}
 		writeJSON(w, http.StatusCreated, node)
 	}
+}
+
+func validNodeAddress(value string) bool {
+	ip := net.ParseIP(strings.TrimSpace(value))
+	return ip != nil && !ip.IsLoopback() && !ip.IsUnspecified() && !ip.IsMulticast()
 }
 
 func (s *Service) claimDeviceEnrollment(w http.ResponseWriter, r *http.Request) {

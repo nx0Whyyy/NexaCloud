@@ -138,7 +138,7 @@ function renderUserDashboard(profile, organization, access) {
     button.addEventListener("click", () => revokeNode(node.id, node.name));
     const containers = node.containers?.length || 0;
     const minecraft = node.minecraft ? ` · ${node.minecraft.players}/${node.minecraft.max_players} joueurs` : "";
-    return resourceRow(node.name, `${node.resources?.cpu || 0} CPU · ${node.resources?.memory || "RAM inconnue"} · ${containers} conteneur(s)${minecraft}`, node.status, button);
+    return resourceRow(node.name, `${node.public_address || "IP non configurée"} · ${node.resources?.cpu || 0} CPU · ${node.resources?.memory || "RAM inconnue"} · ${containers} conteneur(s)${minecraft}`, node.status, button);
   }) : [emptyRow("Aucun node connecté", "Lancez NexaAgent puis approuvez son code d'activation.")]));
 
   const licenseTarget = document.querySelector("[data-licenses]");
@@ -204,13 +204,13 @@ function renderServerPane(view) {
   const pane=document.querySelector("[data-server-pane]"); if(!pane||!selectedServer)return; pane.replaceChildren();
   if(view==="console") { pane.innerHTML='<div class="console-output" data-console-output>Chargez les logs pour commencer.</div><form class="console-command" data-console-form><input name="command" placeholder="say Bonjour depuis NexaCloud" autocomplete="off" required><button type="submit">Envoyer</button></form><button class="compact-button" data-load-logs>Actualiser les logs</button>'; pane.querySelector("[data-console-form]").addEventListener("submit",sendConsole); pane.querySelector("[data-load-logs]").addEventListener("click",loadLogs); loadLogs(); return; }
   if(view==="fichiers") { pane.innerHTML='<div class="file-toolbar"><input data-file-path value="server.properties" placeholder="server.properties"><button data-file-read>Ouvrir</button><button data-file-list>Lister /data</button></div><textarea data-file-editor spellcheck="false" placeholder="Sélectionnez un fichier..."></textarea><button class="button button-primary" data-file-save>Enregistrer</button>'; pane.querySelector("[data-file-read]").addEventListener("click",readFile); pane.querySelector("[data-file-list]").addEventListener("click",listFiles); pane.querySelector("[data-file-save]").addEventListener("click",saveFile); return; }
-  pane.innerHTML='<div class="danger-zone"><span>ZONE SENSIBLE</span><strong>Supprimer le serveur</strong><p>Le conteneur sera supprimé. Le volume de données reste conservé.</p><button data-delete-server>Supprimer</button></div>'; pane.querySelector("[data-delete-server]").addEventListener("click",()=>runServerAction("delete"));
+  pane.innerHTML='<div class="server-settings"><span>INTÉGRATION</span><strong>NexaLink</strong><p>Réinstalle et valide le bridge dans le serveur.</p><button class="compact-button" data-repair-link>Réparer NexaLink</button></div><div class="danger-zone"><span>ZONE SENSIBLE</span><strong>Supprimer le serveur</strong><p>Le conteneur sera supprimé. Le volume de données reste conservé.</p><button data-delete-server>Supprimer</button></div>'; pane.querySelector("[data-repair-link]").addEventListener("click",()=>runServerAction("repair-link")); pane.querySelector("[data-delete-server]").addEventListener("click",()=>runServerAction("delete"));
 }
 
-async function waitForCommand(id) { for(let attempt=0;attempt<60;attempt++){const command=await request(`/api/v1/commands/${id}`);if(["COMPLETED","FAILED"].includes(command.status))return command;await new Promise(resolve=>setTimeout(resolve,1000));}throw new Error("L'action prend plus de temps que prévu"); }
+async function waitForCommand(id) { for(let attempt=0;attempt<180;attempt++){const command=await request(`/api/v1/commands/${id}`);if(["COMPLETED","FAILED"].includes(command.status))return command;await new Promise(resolve=>setTimeout(resolve,1000));}throw new Error("L'action prend plus de temps que prévu"); }
 async function runServerAction(action) { if(!selectedServer)return;if(["kill","delete"].includes(action)&&!confirm(`Confirmer l'action ${action} ?`))return;try{const queued=await request(`/api/v1/servers/${selectedServer.id}/actions`,{method:"POST",body:JSON.stringify({action})});showToast("Action envoyée au node");const result=await waitForCommand(queued.id);if(result.status==="FAILED")throw new Error(result.error);await loadUserDashboard();}catch(error){showToast(error.message);} }
 async function loadLogs(){try{const queued=await request(`/api/v1/servers/${selectedServer.id}/actions`,{method:"POST",body:JSON.stringify({action:"logs"})});const result=await waitForCommand(queued.id);document.querySelector("[data-console-output]").textContent=result.status==="COMPLETED"?result.result:result.error;}catch(error){showToast(error.message);} }
-async function sendConsole(event){event.preventDefault();const input=event.currentTarget.elements.command;try{const queued=await request(`/api/v1/servers/${selectedServer.id}/console`,{method:"POST",body:JSON.stringify({command:input.value})});const result=await waitForCommand(queued.id);if(result.status==="FAILED")throw new Error(result.error);input.value="";showToast("Commande exécutée");setTimeout(loadLogs,500);}catch(error){showToast(error.message);} }
+async function sendConsole(event){event.preventDefault();const input=event.currentTarget.elements.command;const command=input.value;try{const queued=await request(`/api/v1/servers/${selectedServer.id}/console`,{method:"POST",body:JSON.stringify({command})});const result=await waitForCommand(queued.id);if(result.status==="FAILED")throw new Error(result.error);input.value="";const output=document.querySelector("[data-console-output]");output.textContent+=`\n> ${command}\n${result.result || "Commande exécutée"}`;output.scrollTop=output.scrollHeight;showToast("Commande exécutée");}catch(error){showToast(error.message);} }
 async function fileCommand(operation,content=""){const path=document.querySelector("[data-file-path]").value;const queued=await request(`/api/v1/servers/${selectedServer.id}/files`,{method:"POST",body:JSON.stringify({operation,path,content})});const result=await waitForCommand(queued.id);if(result.status==="FAILED")throw new Error(result.error);return result.result;}
 async function readFile(){try{document.querySelector("[data-file-editor]").value=await fileCommand("read");}catch(error){showToast(error.message);} }
 async function listFiles(){try{document.querySelector("[data-file-editor]").value=await fileCommand("list");}catch(error){showToast(error.message);} }
@@ -249,6 +249,21 @@ async function revokeNode(id, name) {
 }
 
 function bindUserActions() {
+	const deviceForm = document.querySelector("[data-device-form]");
+	if (deviceForm && !deviceForm.elements.public_address) {
+		const header = deviceForm.querySelector("header");
+		const nameLabel = document.createElement("label");
+		nameLabel.innerHTML = 'Nom du node<input name="node_name" value="minecraft-01" pattern="[A-Za-z0-9._-]+" maxlength="64" required>';
+		const install = document.createElement("div"); install.className = "install-command";
+		install.innerHTML = '<code data-agent-command></code><button type="button" data-copy-agent>Copier</button>';
+		const ipLabel = document.createElement("label");
+		ipLabel.innerHTML = 'IP publique du serveur<input name="public_address" inputmode="decimal" placeholder="203.0.113.10" required>';
+		header.after(nameLabel, install);
+		deviceForm.querySelector('label:has(input[name="code"])').after(ipLabel);
+		const refreshCommand = () => { const name = deviceForm.elements.node_name.value || "minecraft-01"; install.querySelector("code").textContent = `curl -fsSL https://cloud.nexastudio.dev/install/nexa-agent.sh | sudo sh -s -- ${name}`; };
+		deviceForm.elements.node_name.addEventListener("input", refreshCommand); refreshCommand();
+		install.querySelector("button").addEventListener("click", async () => { await navigator.clipboard.writeText(install.querySelector("code").textContent); showToast("Commande copiée"); });
+	}
   document.querySelectorAll("[data-open]").forEach((button) => button.addEventListener("click", () => document.getElementById(button.dataset.open).showModal()));
   document.querySelectorAll("[data-close-parent]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
   document.querySelectorAll("[data-create-license]").forEach((button) => button.addEventListener("click", createLicense));
