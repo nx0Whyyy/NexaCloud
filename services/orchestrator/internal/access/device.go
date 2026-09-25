@@ -207,15 +207,24 @@ func (s *Service) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := model.Now()
-	updates := map[string]any{"status": model.NodeOnline, "usage": heartbeat.Usage, "containers": heartbeat.Containers, "minecraft": heartbeat.Minecraft, "last_heartbeat": now, "updated_at": now}
+	var node model.Node
+	if err := s.db.Where("id = ? AND status <> ?", credential.NodeID, model.NodeRevoked).First(&node).Error; err != nil {
+		writeError(w, http.StatusGone, "node revoked or unavailable")
+		return
+	}
+	node.Status = model.NodeOnline
+	node.Usage = heartbeat.Usage
+	node.Containers = heartbeat.Containers
+	node.Minecraft = heartbeat.Minecraft
+	node.LastHeartbeat = now
+	node.UpdatedAt = now
 	if heartbeat.AgentVersion != "" {
-		updates["agent_version"] = heartbeat.AgentVersion
+		node.AgentVersion = heartbeat.AgentVersion
 	}
 	if heartbeat.Resources.Memory != "" || heartbeat.Resources.CPU > 0 {
-		updates["resources"] = heartbeat.Resources
+		node.Resources = heartbeat.Resources
 	}
-	result := s.db.Model(&model.Node{}).Where("id = ? AND status <> ?", credential.NodeID, model.NodeRevoked).Updates(updates)
-	if result.Error != nil || result.RowsAffected == 0 {
+	if err := s.db.Save(&node).Error; err != nil {
 		writeError(w, http.StatusGone, "node revoked or unavailable")
 		return
 	}
