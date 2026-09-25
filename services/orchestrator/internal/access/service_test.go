@@ -1,6 +1,7 @@
 package access
 
 import (
+	"encoding/base64"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -71,6 +72,18 @@ func TestValidNodeAddress(t *testing.T) {
 	for _, address := range []string{"", "cloud.example.com", "127.0.0.1", "0.0.0.0", "224.0.0.1"} {
 		if validNodeAddress(address) {
 			t.Fatalf("expected %s to be rejected", address)
+		}
+	}
+}
+
+func TestValidSSHPublicKey(t *testing.T) {
+	payload := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	if !validSSHPublicKey("ssh-ed25519 " + payload + " workstation") {
+		t.Fatal("expected a valid Ed25519 public key")
+	}
+	for _, key := range []string{"", "ssh-dss " + payload, "ssh-ed25519 invalid", "ssh-ed25519 " + payload + "\ninjected"} {
+		if validSSHPublicKey(key) {
+			t.Fatalf("expected key %q to be rejected", key)
 		}
 	}
 }

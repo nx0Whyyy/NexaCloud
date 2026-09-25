@@ -34,6 +34,7 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux, currentUser UserResolver) {
 	mux.HandleFunc("POST /api/v1/servers/{id}/actions", s.serverAction(currentUser))
 	mux.HandleFunc("POST /api/v1/servers/{id}/console", s.serverConsole(currentUser))
 	mux.HandleFunc("POST /api/v1/servers/{id}/files", s.serverFiles(currentUser))
+	mux.HandleFunc("POST /api/v1/servers/{id}/sftp", s.serverSFTP(currentUser))
 	mux.HandleFunc("GET /api/v1/commands/{id}", s.commandStatus(currentUser))
 	mux.HandleFunc("POST /api/v1/agent/commands/next", s.nextAgentCommand)
 	mux.HandleFunc("POST /api/v1/agent/commands/{id}/result", s.completeAgentCommand)

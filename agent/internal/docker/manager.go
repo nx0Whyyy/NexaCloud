@@ -73,6 +73,96 @@ func (m *Manager) WriteFile(ctx context.Context, containerID, relative, content 
 	return string(out), nil
 }
 
+func (m *Manager) MakeDirectory(ctx context.Context, containerID, relative string) (string, error) {
+	target, err := dataPath(ctx, containerID, relative)
+	if err != nil {
+		return "", err
+	}
+	if target == "/data" {
+		return "", fmt.Errorf("un dossier doit être sélectionné")
+	}
+	_, err = docker(ctx, "exec", containerID, "mkdir", "-p", "--", target)
+	return "dossier créé", err
+}
+
+func (m *Manager) DeleteFile(ctx context.Context, containerID, relative string) (string, error) {
+	target, err := dataPath(ctx, containerID, relative)
+	if err != nil {
+		return "", err
+	}
+	if target == "/data" {
+		return "", fmt.Errorf("la racine du serveur ne peut pas être supprimée")
+	}
+	_, err = docker(ctx, "exec", containerID, "rm", "-rf", "--", target)
+	return "élément supprimé", err
+}
+
+func (m *Manager) MoveFile(ctx context.Context, containerID, source, destination string) (string, error) {
+	from, err := dataPath(ctx, containerID, source)
+	if err != nil {
+		return "", err
+	}
+	to, err := dataPath(ctx, containerID, destination)
+	if err != nil {
+		return "", err
+	}
+	if from == "/data" || to == "/data" {
+		return "", fmt.Errorf("la racine du serveur ne peut pas être déplacée")
+	}
+	_, err = docker(ctx, "exec", containerID, "mv", "--", from, to)
+	return "élément déplacé", err
+}
+
+func (m *Manager) EnableSFTP(ctx context.Context, containerID string, port int, publicKey string) (string, error) {
+	if port < 1024 || port > 65535 || strings.ContainsAny(publicKey, "\r\n\x00") {
+		return "", fmt.Errorf("configuration SFTP invalide")
+	}
+	volume, err := docker(ctx, "inspect", "--format", `{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}`, containerID)
+	if err != nil || strings.TrimSpace(volume) == "" {
+		return "", fmt.Errorf("volume Minecraft introuvable")
+	}
+	name := containerID + "-sftp"
+	_, _ = docker(context.Background(), "rm", "-f", name)
+	root, err := os.MkdirTemp("", "nexacloud-sftp-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(root)
+	keyPath := filepath.Join(root, "authorized.pub")
+	if err := os.WriteFile(keyPath, []byte(strings.TrimSpace(publicKey)+"\n"), 0600); err != nil {
+		return "", err
+	}
+	_, err = docker(ctx, "create", "--name", name, "--restart", "unless-stopped", "-p", fmt.Sprintf("%d:22", port), "-v", strings.TrimSpace(volume)+":/home/nexa/data", "atmoz/sftp:alpine", "nexa::1000")
+	if err != nil {
+		return "", fmt.Errorf("création SFTP: %w", err)
+	}
+	if _, err = docker(ctx, "start", name); err != nil {
+		_, _ = docker(context.Background(), "rm", "-f", name)
+		return "", fmt.Errorf("initialisation SFTP: %w", err)
+	}
+	if _, err = docker(ctx, "exec", name, "mkdir", "-p", "/home/nexa/.ssh/keys"); err != nil {
+		_, _ = docker(context.Background(), "rm", "-f", name)
+		return "", fmt.Errorf("préparation de la clé SFTP: %w", err)
+	}
+	if _, err = docker(ctx, "cp", keyPath, name+":/home/nexa/.ssh/keys/authorized.pub"); err != nil {
+		_, _ = docker(context.Background(), "rm", "-f", name)
+		return "", fmt.Errorf("installation de la clé SFTP: %w", err)
+	}
+	if _, err = docker(ctx, "restart", name); err != nil {
+		_, _ = docker(context.Background(), "rm", "-f", name)
+		return "", fmt.Errorf("activation SFTP: %w", err)
+	}
+	return fmt.Sprintf("SFTP ONLINE sur le port %d", port), nil
+}
+
+func (m *Manager) DisableSFTP(ctx context.Context, containerID string) (string, error) {
+	name := containerID + "-sftp"
+	if _, err := docker(ctx, "rm", "-f", name); err != nil && !strings.Contains(err.Error(), "No such container") {
+		return "", err
+	}
+	return "SFTP désactivé", nil
+}
+
 const maxFileResult = 256 * 1024
 
 func dataPath(ctx context.Context, containerID, relative string) (string, error) {
@@ -288,6 +378,7 @@ func (m *Manager) Stop(ctx context.Context, containerID string) error {
 }
 
 func (m *Manager) Remove(ctx context.Context, containerID string) error {
+	_, _ = m.DisableSFTP(context.Background(), containerID)
 	_, err := docker(ctx, "rm", "-f", containerID)
 	return err
 }

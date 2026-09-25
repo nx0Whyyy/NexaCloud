@@ -120,6 +120,9 @@ type Instance struct {
 	PlayerCount    int             `json:"player_count"`
 	Version        string          `json:"version,omitempty"` // software version
 	Plugins        []string        `json:"plugins,omitempty" gorm:"type:text[]"`
+	SFTPEnabled    bool            `json:"sftp_enabled"`
+	SFTPPort       int             `json:"sftp_port,omitempty"`
+	SFTPUser       string          `json:"sftp_user,omitempty" gorm:"size:32"`
 	ConfigVersion  string          `json:"config_version,omitempty"`
 	CreatedAt      time.Time       `json:"created_at"`
 	StartedAt      *time.Time      `json:"started_at,omitempty"`

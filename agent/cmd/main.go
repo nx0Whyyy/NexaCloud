@@ -217,6 +217,16 @@ func executeCommand(ctx context.Context, command *model.AgentCommand, logger *sl
 		return manager.ReadFile(ctx, container, command.Params["path"])
 	case "FILE_WRITE":
 		return manager.WriteFile(ctx, container, command.Params["path"], command.Params["content"])
+	case "FILE_MKDIR":
+		return manager.MakeDirectory(ctx, container, command.Params["path"])
+	case "FILE_DELETE":
+		return manager.DeleteFile(ctx, container, command.Params["path"])
+	case "FILE_MOVE":
+		return manager.MoveFile(ctx, container, command.Params["path"], command.Params["content"])
+	case "ENABLE_SFTP":
+		return manager.EnableSFTP(ctx, container, mustPort(command.Params["port"]), command.Params["public_key"])
+	case "DISABLE_SFTP":
+		return manager.DisableSFTP(ctx, container)
 	default:
 		return "", fmt.Errorf("unsupported command %s", command.Command)
 	}

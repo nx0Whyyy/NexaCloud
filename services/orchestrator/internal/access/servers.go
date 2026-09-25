@@ -1,6 +1,7 @@
 package access
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net"
@@ -204,9 +205,9 @@ func (s *Service) serverFiles(resolve UserResolver) http.HandlerFunc {
 		} else {
 			clean = strings.TrimPrefix(clean, "/")
 		}
-		commands := map[string]string{"list": "FILE_LIST", "read": "FILE_READ", "write": "FILE_WRITE"}
+		commands := map[string]string{"list": "FILE_LIST", "read": "FILE_READ", "write": "FILE_WRITE", "mkdir": "FILE_MKDIR", "delete": "FILE_DELETE", "move": "FILE_MOVE"}
 		commandName, exists := commands[input.Operation]
-		if !exists || len(input.Content) > 256*1024 {
+		if !exists || len(input.Content) > 256*1024 || (input.Operation == "move" && strings.TrimSpace(input.Content) == "") {
 			writeError(w, http.StatusBadRequest, "opération fichier invalide")
 			return
 		}
@@ -217,6 +218,67 @@ func (s *Service) serverFiles(resolve UserResolver) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusAccepted, command)
 	}
+}
+
+func (s *Service) serverSFTP(resolve UserResolver) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !validMutationOrigin(r) {
+			writeError(w, http.StatusForbidden, "origine refusée")
+			return
+		}
+		_, org, role, instance, ok := s.authorizeInstance(w, r, resolve)
+		if !ok {
+			return
+		}
+		if !canManageInfrastructure(role) {
+			writeError(w, http.StatusForbidden, "server.sftp permission required")
+			return
+		}
+		var input struct {
+			Enabled   bool   `json:"enabled"`
+			Port      int    `json:"port"`
+			PublicKey string `json:"public_key"`
+		}
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input) != nil {
+			writeError(w, http.StatusBadRequest, "configuration SFTP invalide")
+			return
+		}
+		commandName := "DISABLE_SFTP"
+		params := map[string]string{}
+		if input.Enabled {
+			input.PublicKey = strings.TrimSpace(input.PublicKey)
+			if input.Port < 1024 || input.Port > 65535 || !validSSHPublicKey(input.PublicKey) {
+				writeError(w, http.StatusBadRequest, "port ou clé publique SSH invalide")
+				return
+			}
+			var used int64
+			s.db.Model(&model.Instance{}).Where("node_id = ? AND sftp_port = ? AND id <> ?", instance.NodeID, input.Port, instance.ID).Count(&used)
+			if used > 0 || input.Port == instance.Port {
+				writeError(w, http.StatusConflict, "ce port SFTP est déjà utilisé")
+				return
+			}
+			commandName = "ENABLE_SFTP"
+			params = map[string]string{"port": strconv.Itoa(input.Port), "public_key": input.PublicKey}
+		}
+		command, err := s.queueCommand(org.ID, *instance.NodeID, instance.ID, commandName, params)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "configuration SFTP indisponible")
+			return
+		}
+		writeJSON(w, http.StatusAccepted, command)
+	}
+}
+
+func validSSHPublicKey(value string) bool {
+	if strings.ContainsAny(value, "\r\n\x00") {
+		return false
+	}
+	parts := strings.Fields(value)
+	if len(parts) < 2 || (parts[0] != "ssh-ed25519" && parts[0] != "ssh-rsa" && !strings.HasPrefix(parts[0], "ecdsa-sha2-")) {
+		return false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(parts[1])
+	return err == nil && len(decoded) >= 32 && len(value) <= 4096
 }
 
 func (s *Service) commandStatus(resolve UserResolver) http.HandlerFunc {
@@ -354,6 +416,19 @@ func (s *Service) completeAgentCommand(w http.ResponseWriter, r *http.Request) {
 				s.db.Delete(&model.Instance{}, "id = ?", *command.InstanceID)
 				w.WriteHeader(http.StatusNoContent)
 				return
+			}
+		case "ENABLE_SFTP":
+			if input.Success {
+				port, _ := strconv.Atoi(command.Params["port"])
+				updates["sftp_enabled"] = true
+				updates["sftp_port"] = port
+				updates["sftp_user"] = "nexa"
+			}
+		case "DISABLE_SFTP":
+			if input.Success {
+				updates["sftp_enabled"] = false
+				updates["sftp_port"] = 0
+				updates["sftp_user"] = ""
 			}
 		}
 		s.db.Model(&model.Instance{}).Where("id = ?", *command.InstanceID).Updates(updates)
