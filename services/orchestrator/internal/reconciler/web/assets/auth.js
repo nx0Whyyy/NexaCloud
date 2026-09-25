@@ -10,6 +10,8 @@ document.querySelectorAll("[data-toggle-password]").forEach((button) => button.a
 
 const password = document.querySelector('[name="password"]');
 const confirmation = document.querySelector('[name="password_confirmation"]');
+const strength = document.querySelector("[data-password-strength]");
+const strengthLabel = document.querySelector("[data-strength-label]");
 const rules = {
   length: (value) => value.length >= 12,
   case: (value) => /[a-z]/.test(value) && /[A-Z]/.test(value),
@@ -18,14 +20,13 @@ const rules = {
 };
 
 function updateStrength() {
-  if (!password) return;
+  if (!password || !strength) return;
   const states = Object.entries(rules).map(([name, check]) => [name, check(password.value)]);
   states.forEach(([name, valid]) => document.querySelector(`[data-rule="${name}"]`)?.classList.toggle("valid", valid));
   const score = states.filter(([, valid]) => valid).length;
-  const progress = document.querySelector("[data-password-strength]");
-  progress.value = score;
-  progress.dataset.score = score;
-  document.querySelector("[data-strength-label]").textContent = ["Très faible", "Faible", "Moyen", "Bon", "Robuste"][score];
+  strength.value = score;
+  strength.dataset.score = score;
+  strengthLabel.textContent = ["Très faible", "Faible", "Moyen", "Bon", "Robuste"][score];
   if (confirmation?.value) confirmation.setCustomValidity(confirmation.value === password.value ? "" : "Les mots de passe ne correspondent pas.");
 }
 

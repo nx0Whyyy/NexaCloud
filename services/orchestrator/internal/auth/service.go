@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -164,6 +165,7 @@ func (s *Service) register(w http.ResponseWriter, r *http.Request) {
 	}
 	if verificationToken != "" {
 		if err := s.mailer.SendVerification(user.Email, user.Username, s.publicURL+"/verify#token="+verificationToken); err != nil {
+			slog.Error("failed to send verification email", "error", err)
 			writeError(w, http.StatusServiceUnavailable, "Compte créé, mais l'e-mail n'a pas pu être envoyé. Utilisez le renvoi de vérification.")
 			return
 		}
