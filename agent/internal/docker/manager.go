@@ -78,12 +78,16 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (string, error
 func (m *Manager) CreateMinecraft(ctx context.Context, name string, port int, memory string) (string, error) {
 	containerName := "nexacloud-" + name
 	volumeName := containerName + "-data"
-	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped", "-p", fmt.Sprintf("%d:25565", port), "-e", "EULA=TRUE", "-e", "TYPE=PAPER", "-e", "MEMORY=" + memory, "-v", volumeName + ":/data", "itzg/minecraft-server:java21"}
+	args := []string{"run", "-d", "--name", containerName, "--restart", "unless-stopped", "-p", fmt.Sprintf("%d:25565", port), "-e", "EULA=TRUE", "-e", "TYPE=PAPER", "-e", "MEMORY=" + memory, "-v", volumeName + ":/data", "itzg/minecraft-server:java25"}
 	out, err := docker(ctx, args...)
 	if err != nil {
 		return "", fmt.Errorf("minecraft container: %w", err)
 	}
-	return strings.TrimSpace(out), nil
+	lines := strings.Fields(out)
+	if len(lines) == 0 {
+		return "", fmt.Errorf("docker returned an empty container id")
+	}
+	return lines[len(lines)-1], nil
 }
 
 func (m *Manager) Start(ctx context.Context, containerID string) error {
