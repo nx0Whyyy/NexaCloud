@@ -134,6 +134,7 @@ func run(cfg *config.Config, client *api.Client, logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	logger.Info("nexa-agent started", "version", version, "node_id", state.NodeID)
+	go commandLoop(ctx, state, client, logger)
 	if err := sendHeartbeat(ctx, cfg, state, client, logger); err != nil {
 		logger.Warn("initial heartbeat failed", "error", err)
 	}
@@ -150,6 +151,70 @@ func run(cfg *config.Config, client *api.Client, logger *slog.Logger) error {
 		}
 	}
 }
+
+func commandLoop(ctx context.Context, state *config.State, client *api.Client, logger *slog.Logger) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			command, err := client.NextCommand(ctx, state.AgentToken)
+			if err != nil {
+				logger.Warn("command poll failed", "error", err)
+				continue
+			}
+			if command == nil {
+				continue
+			}
+			result, executeErr := executeCommand(ctx, command, logger)
+			errorMessage := ""
+			if executeErr != nil {
+				errorMessage = executeErr.Error()
+			}
+			if err := client.CompleteCommand(ctx, state.AgentToken, command.ID.String(), executeErr == nil, result, errorMessage); err != nil {
+				logger.Error("command result failed", "command_id", command.ID, "error", err)
+			}
+		}
+	}
+}
+
+func executeCommand(ctx context.Context, command *model.AgentCommand, logger *slog.Logger) (string, error) {
+	manager := docker.New(logger)
+	container := command.Params["container"]
+	if container == "" && command.InstanceID != nil {
+		container = "nexacloud-server-" + command.InstanceID.String()[:8]
+	}
+	switch command.Command {
+	case "CREATE_SERVER":
+		return manager.CreateMinecraft(ctx, command.Params["name"], mustPort(command.Params["port"]), command.Params["memory"])
+	case "START_SERVER":
+		return "", manager.Start(ctx, container)
+	case "STOP_SERVER":
+		return "", manager.Stop(ctx, container)
+	case "RESTART_SERVER":
+		return "", manager.Restart(ctx, container)
+	case "KILL_SERVER":
+		return "", manager.Kill(ctx, container)
+	case "DELETE_SERVER":
+		return "", manager.Remove(ctx, container)
+	case "SERVER_LOGS":
+		return manager.Logs(ctx, container, 300)
+	case "CONSOLE":
+		return manager.Console(ctx, container, command.Params["command"])
+	case "FILE_LIST":
+		return manager.ListFiles(ctx, container, command.Params["path"])
+	case "FILE_READ":
+		return manager.ReadFile(ctx, container, command.Params["path"])
+	case "FILE_WRITE":
+		return manager.WriteFile(ctx, container, command.Params["path"], command.Params["content"])
+	default:
+		return "", fmt.Errorf("unsupported command %s", command.Command)
+	}
+}
+
+func mustPort(value string) int { port, _ := strconv.Atoi(value); return port }
 
 func check(ctx context.Context, cfg *config.Config, client *api.Client, logger *slog.Logger) error {
 	state, err := config.LoadState(cfg.StatePath)

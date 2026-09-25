@@ -47,6 +47,17 @@ func (c *Client) Heartbeat(ctx context.Context, token string, heartbeat model.Ag
 	err := c.request(ctx, http.MethodPost, "/api/v1/agent/heartbeat", token, heartbeat, &result)
 	return &result, err
 }
+func (c *Client) NextCommand(ctx context.Context, token string) (*model.AgentCommand, error) {
+	var result model.AgentCommand
+	status, err := c.requestStatus(ctx, http.MethodPost, "/api/v1/agent/commands/next", token, map[string]string{}, &result)
+	if status == http.StatusNoContent {
+		return nil, nil
+	}
+	return &result, err
+}
+func (c *Client) CompleteCommand(ctx context.Context, token string, id string, success bool, result, commandError string) error {
+	return c.request(ctx, http.MethodPost, "/api/v1/agent/commands/"+id+"/result", token, map[string]any{"success": success, "result": result, "error": commandError}, nil)
+}
 func (c *Client) request(ctx context.Context, method, path, token string, input, output any) error {
 	_, err := c.requestStatus(ctx, method, path, token, input, output)
 	return err
@@ -78,6 +89,9 @@ func (c *Client) requestStatus(ctx context.Context, method, path, token string, 
 			failure.Error = resp.Status
 		}
 		return resp.StatusCode, fmt.Errorf("control plane: %s", failure.Error)
+	}
+	if resp.StatusCode == http.StatusNoContent {
+		return resp.StatusCode, nil
 	}
 	if output != nil {
 		return resp.StatusCode, json.NewDecoder(resp.Body).Decode(output)

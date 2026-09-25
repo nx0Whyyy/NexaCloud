@@ -15,6 +15,39 @@ type Manager struct {
 	logger *slog.Logger
 }
 
+func (m *Manager) Restart(ctx context.Context, containerID string) error {
+	_, err := docker(ctx, "restart", containerID)
+	return err
+}
+func (m *Manager) Kill(ctx context.Context, containerID string) error {
+	_, err := docker(ctx, "kill", containerID)
+	return err
+}
+func (m *Manager) Logs(ctx context.Context, containerID string, lines int) (string, error) {
+	if lines < 1 || lines > 1000 {
+		lines = 200
+	}
+	return docker(ctx, "logs", "--tail", fmt.Sprint(lines), containerID)
+}
+func (m *Manager) Console(ctx context.Context, containerID, command string) (string, error) {
+	return docker(ctx, "exec", containerID, "rcon-cli", command)
+}
+func (m *Manager) ListFiles(ctx context.Context, containerID, relative string) (string, error) {
+	return docker(ctx, "exec", containerID, "find", "/data/"+relative, "-maxdepth", "1", "-printf", "%f\t%y\n")
+}
+func (m *Manager) ReadFile(ctx context.Context, containerID, relative string) (string, error) {
+	return docker(ctx, "exec", containerID, "cat", "/data/"+relative)
+}
+func (m *Manager) WriteFile(ctx context.Context, containerID, relative, content string) (string, error) {
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", containerID, "tee", "/data/"+relative)
+	cmd.Stdin = strings.NewReader(content)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("write file: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
 func (m *Manager) List(ctx context.Context) ([]model.ContainerInfo, error) {
 	out, err := docker(ctx, "ps", "-a", "--format", "{{json .}}")
 	if err != nil {

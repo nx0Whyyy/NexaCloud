@@ -105,3 +105,18 @@ type DeviceEnrollment struct {
 	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
 	ClaimedAt       *time.Time `json:"claimed_at,omitempty"`
 }
+
+type AgentCommand struct {
+	ID             uuid.UUID         `json:"id" gorm:"type:uuid;primaryKey"`
+	OrganizationID uuid.UUID         `json:"organization_id" gorm:"type:uuid;index;not null"`
+	NodeID         uuid.UUID         `json:"node_id" gorm:"type:uuid;index;not null"`
+	InstanceID     *uuid.UUID        `json:"instance_id,omitempty" gorm:"type:uuid;index"`
+	Command        string            `json:"command" gorm:"size:40;not null"`
+	Status         string            `json:"status" gorm:"size:20;index;not null"`
+	Params         map[string]string `json:"params,omitempty" gorm:"serializer:json;type:jsonb"`
+	Result         string            `json:"result,omitempty" gorm:"type:text"`
+	Error          string            `json:"error,omitempty" gorm:"type:text"`
+	CreatedAt      time.Time         `json:"created_at"`
+	ClaimedAt      *time.Time        `json:"claimed_at,omitempty"`
+	CompletedAt    *time.Time        `json:"completed_at,omitempty"`
+}

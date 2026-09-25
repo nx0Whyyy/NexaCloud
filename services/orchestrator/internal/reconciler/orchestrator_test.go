@@ -66,7 +66,7 @@ func TestProductPages(t *testing.T) {
 	orchestrator := &Orchestrator{mux: http.NewServeMux()}
 	orchestrator.setupRoutes()
 
-	for _, path := range []string{"/platform", "/infrastructure", "/docs", "/login", "/register", "/dashboard", "/dashboard/infrastructure", "/dashboard/billing", "/dashboard/profile", "/staff"} {
+	for _, path := range []string{"/platform", "/infrastructure", "/docs", "/login", "/register", "/dashboard", "/dashboard/servers", "/dashboard/infrastructure", "/dashboard/billing", "/dashboard/profile", "/staff"} {
 		t.Run(path, func(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, path, nil)
 			response := httptest.NewRecorder()

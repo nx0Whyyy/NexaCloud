@@ -29,6 +29,14 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux, currentUser UserResolver) {
 	mux.HandleFunc("POST /api/v1/agent/heartbeat", s.agentHeartbeat)
 	mux.HandleFunc("POST /api/v1/device/approve", s.approveDeviceEnrollment(currentUser))
 	mux.HandleFunc("DELETE /api/v1/nodes/{id}", s.revokeNode(currentUser))
+	mux.HandleFunc("GET /api/v1/servers", s.listServers(currentUser))
+	mux.HandleFunc("POST /api/v1/servers", s.createServer(currentUser))
+	mux.HandleFunc("POST /api/v1/servers/{id}/actions", s.serverAction(currentUser))
+	mux.HandleFunc("POST /api/v1/servers/{id}/console", s.serverConsole(currentUser))
+	mux.HandleFunc("POST /api/v1/servers/{id}/files", s.serverFiles(currentUser))
+	mux.HandleFunc("GET /api/v1/commands/{id}", s.commandStatus(currentUser))
+	mux.HandleFunc("POST /api/v1/agent/commands/next", s.nextAgentCommand)
+	mux.HandleFunc("POST /api/v1/agent/commands/{id}/result", s.completeAgentCommand)
 }
 
 func (s *Service) currentOrganization(resolve UserResolver) http.HandlerFunc {

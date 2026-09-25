@@ -146,6 +146,7 @@ func (o *Orchestrator) setupRoutes() {
 	o.mux.HandleFunc("GET /verify", o.servePage("verify.html"))
 	o.mux.HandleFunc("GET /dashboard", o.servePage("dashboard.html"))
 	o.mux.HandleFunc("GET /dashboard/infrastructure", o.servePage("dashboard-infrastructure.html"))
+	o.mux.HandleFunc("GET /dashboard/servers", o.servePage("dashboard-servers.html"))
 	o.mux.HandleFunc("GET /dashboard/billing", o.servePage("dashboard-billing.html"))
 	o.mux.HandleFunc("GET /dashboard/profile", o.servePage("dashboard-profile.html"))
 	o.mux.HandleFunc("GET /staff", o.servePage("staff.html"))

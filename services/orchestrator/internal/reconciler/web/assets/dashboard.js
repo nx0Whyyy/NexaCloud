@@ -1,4 +1,10 @@
 const page = document.body.dataset.console;
+const consoleNav = document.querySelector(".console-nav");
+if (page === "user" && consoleNav && !consoleNav.querySelector('[href="/dashboard/servers"]')) {
+  const link = document.createElement("a"); link.href = "/dashboard/servers"; link.textContent = "Serveurs";
+  const infrastructure = consoleNav.querySelector('[href="/dashboard/infrastructure"]');
+  consoleNav.insertBefore(link, infrastructure);
+}
 
 function emptyRow(title, description) {
   const row = document.createElement("div");
@@ -150,6 +156,12 @@ function renderUserDashboard(profile, organization, access) {
     select.replaceChildren(...networks.map((network) => new Option(network.name, network.id)));
     if (!networks.length) select.append(new Option("Créez d'abord un réseau", ""));
   }
+  const nodeSelect = document.querySelector("[data-node-select]");
+  if (nodeSelect) {
+    const available = nodes.filter((node) => node.status === "ONLINE");
+    nodeSelect.replaceChildren(...available.map((node) => new Option(node.name, node.id)));
+    if (!available.length) nodeSelect.append(new Option("Aucun node en ligne", ""));
+  }
   renderActivity(activity);
 }
 
@@ -158,7 +170,51 @@ async function loadUserDashboard() {
     request("/api/v1/auth/me"), request("/api/v1/organizations/current"), request("/api/v1/entitlements"),
   ]);
   renderUserDashboard(profile, organization, access);
+  if (document.querySelector("[data-server-list]")) renderServers(await request("/api/v1/servers"));
 }
+
+let selectedServer = null;
+function renderServers(servers) {
+  setText('[data-count="instances"]', servers.length);
+  const list = document.querySelector("[data-server-list]");
+  if (!servers.length) { list.replaceChildren(emptyRow("Aucun serveur", "Créez votre première instance Paper.")); return; }
+  list.replaceChildren(...servers.map((server) => {
+    const button = document.createElement("button"); button.className = "server-list-item";
+    const state = document.createElement("i"); state.dataset.state = server.status.toLowerCase();
+    const text = document.createElement("span"); const name = document.createElement("strong"); const meta = document.createElement("small");
+    name.textContent = server.name; meta.textContent = `${server.status} · :${server.port}`; text.append(name, meta); button.append(state, text);
+    button.addEventListener("click", () => { selectedServer = server; document.querySelectorAll(".server-list-item").forEach((item) => item.classList.remove("active")); button.classList.add("active"); renderServerWorkspace(server); });
+    return button;
+  }));
+  list.firstElementChild?.click();
+}
+
+function renderServerWorkspace(server) {
+  const target = document.querySelector("[data-server-workspace]"); target.replaceChildren();
+  const header = document.createElement("header"); header.className = "server-toolbar";
+  const identity = document.createElement("div"); identity.innerHTML = `<span>INSTANCE</span><h2></h2><p></p>`; identity.querySelector("h2").textContent = server.name; identity.querySelector("p").textContent = `${server.address} · ${server.resources?.memory || "Mémoire auto"}`;
+  const controls = document.createElement("div"); controls.className = "server-controls";
+  [["Démarrer","start"],["Arrêter","stop"],["Redémarrer","restart"],["Forcer l'arrêt","kill"]].forEach(([label, action]) => { const button=document.createElement("button"); button.textContent=label; button.dataset.serverAction=action; button.addEventListener("click",()=>runServerAction(action)); controls.append(button); });
+  header.append(identity,controls);
+  const tabs=document.createElement("div"); tabs.className="server-tabs"; ["Console","Fichiers","Paramètres"].forEach((label,index)=>{const button=document.createElement("button");button.textContent=label;if(!index)button.className="active";button.addEventListener("click",()=>{tabs.querySelectorAll("button").forEach(x=>x.classList.remove("active"));button.classList.add("active");renderServerPane(label.toLowerCase());});tabs.append(button);});
+  const pane=document.createElement("div");pane.className="server-pane";pane.dataset.serverPane="";target.append(header,tabs,pane);renderServerPane("console");
+}
+
+function renderServerPane(view) {
+  const pane=document.querySelector("[data-server-pane]"); if(!pane||!selectedServer)return; pane.replaceChildren();
+  if(view==="console") { pane.innerHTML='<div class="console-output" data-console-output>Chargez les logs pour commencer.</div><form class="console-command" data-console-form><input name="command" placeholder="say Bonjour depuis NexaCloud" autocomplete="off" required><button type="submit">Envoyer</button></form><button class="compact-button" data-load-logs>Actualiser les logs</button>'; pane.querySelector("[data-console-form]").addEventListener("submit",sendConsole); pane.querySelector("[data-load-logs]").addEventListener("click",loadLogs); loadLogs(); return; }
+  if(view==="fichiers") { pane.innerHTML='<div class="file-toolbar"><input data-file-path value="server.properties" placeholder="server.properties"><button data-file-read>Ouvrir</button><button data-file-list>Lister /data</button></div><textarea data-file-editor spellcheck="false" placeholder="Sélectionnez un fichier..."></textarea><button class="button button-primary" data-file-save>Enregistrer</button>'; pane.querySelector("[data-file-read]").addEventListener("click",readFile); pane.querySelector("[data-file-list]").addEventListener("click",listFiles); pane.querySelector("[data-file-save]").addEventListener("click",saveFile); return; }
+  pane.innerHTML='<div class="danger-zone"><span>ZONE SENSIBLE</span><strong>Supprimer le serveur</strong><p>Le conteneur sera supprimé. Le volume de données reste conservé.</p><button data-delete-server>Supprimer</button></div>'; pane.querySelector("[data-delete-server]").addEventListener("click",()=>runServerAction("delete"));
+}
+
+async function waitForCommand(id) { for(let attempt=0;attempt<60;attempt++){const command=await request(`/api/v1/commands/${id}`);if(["COMPLETED","FAILED"].includes(command.status))return command;await new Promise(resolve=>setTimeout(resolve,1000));}throw new Error("L'action prend plus de temps que prévu"); }
+async function runServerAction(action) { if(!selectedServer)return;if(["kill","delete"].includes(action)&&!confirm(`Confirmer l'action ${action} ?`))return;try{const queued=await request(`/api/v1/servers/${selectedServer.id}/actions`,{method:"POST",body:JSON.stringify({action})});showToast("Action envoyée au node");const result=await waitForCommand(queued.id);if(result.status==="FAILED")throw new Error(result.error);await loadUserDashboard();}catch(error){showToast(error.message);} }
+async function loadLogs(){try{const queued=await request(`/api/v1/servers/${selectedServer.id}/actions`,{method:"POST",body:JSON.stringify({action:"logs"})});const result=await waitForCommand(queued.id);document.querySelector("[data-console-output]").textContent=result.status==="COMPLETED"?result.result:result.error;}catch(error){showToast(error.message);} }
+async function sendConsole(event){event.preventDefault();const input=event.currentTarget.elements.command;try{const queued=await request(`/api/v1/servers/${selectedServer.id}/console`,{method:"POST",body:JSON.stringify({command:input.value})});const result=await waitForCommand(queued.id);if(result.status==="FAILED")throw new Error(result.error);input.value="";showToast("Commande exécutée");setTimeout(loadLogs,500);}catch(error){showToast(error.message);} }
+async function fileCommand(operation,content=""){const path=document.querySelector("[data-file-path]").value;const queued=await request(`/api/v1/servers/${selectedServer.id}/files`,{method:"POST",body:JSON.stringify({operation,path,content})});const result=await waitForCommand(queued.id);if(result.status==="FAILED")throw new Error(result.error);return result.result;}
+async function readFile(){try{document.querySelector("[data-file-editor]").value=await fileCommand("read");}catch(error){showToast(error.message);} }
+async function listFiles(){try{document.querySelector("[data-file-editor]").value=await fileCommand("list");}catch(error){showToast(error.message);} }
+async function saveFile(){try{await fileCommand("write",document.querySelector("[data-file-editor]").value);showToast("Fichier enregistré");}catch(error){showToast(error.message);} }
 
 async function refreshUserDashboard(message) {
   await loadUserDashboard();
@@ -249,6 +305,7 @@ function bindUserActions() {
       showToast("Mot de passe modifié · autres sessions déconnectées");
     } catch (error) { message.textContent = error.message; }
   });
+  document.querySelector("[data-server-form]")?.addEventListener("submit", async (event) => { event.preventDefault(); const form=event.currentTarget; const message=form.querySelector("[data-server-message]"); message.textContent=""; try{const values=Object.fromEntries(new FormData(form));values.port=Number(values.port);await request("/api/v1/servers",{method:"POST",body:JSON.stringify(values)});form.closest("dialog").close();form.reset();showToast("Création envoyée au node");await loadUserDashboard();}catch(error){message.textContent=error.message;} });
 }
 
 async function loadStaffDashboard() {

@@ -182,23 +182,12 @@ func (s *Service) claimDeviceEnrollment(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Service) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
-	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
-	if !strings.HasPrefix(authorization, "Bearer ") {
-		writeError(w, http.StatusUnauthorized, "agent credential required")
+	credential, ok := s.authenticateAgent(w, r)
+	if !ok {
 		return
 	}
-	token := strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer "))
-	if len(token) < 32 {
-		writeError(w, http.StatusUnauthorized, "agent credential invalid")
-		return
-	}
-	if !s.heartbeatLimit.allow("heartbeat:" + hashSecret(token)) {
+	if !s.heartbeatLimit.allow("heartbeat:" + credential.ID.String()) {
 		writeError(w, http.StatusTooManyRequests, "heartbeat rate limit reached")
-		return
-	}
-	var credential model.NodeCredential
-	if err := s.db.Where("secret_hash = ? AND status = ? AND revoked_at IS NULL", hashSecret(token), "ACTIVE").First(&credential).Error; err != nil {
-		writeError(w, http.StatusUnauthorized, "agent credential invalid")
 		return
 	}
 	var heartbeat model.AgentHeartbeat
@@ -229,6 +218,25 @@ func (s *Service) agentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, model.AgentHeartbeatResponse{Status: "ok", NodeID: credential.NodeID, ReceivedAt: now})
+}
+
+func (s *Service) authenticateAgent(w http.ResponseWriter, r *http.Request) (model.NodeCredential, bool) {
+	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(authorization, "Bearer ") {
+		writeError(w, http.StatusUnauthorized, "agent credential required")
+		return model.NodeCredential{}, false
+	}
+	token := strings.TrimSpace(strings.TrimPrefix(authorization, "Bearer "))
+	if len(token) < 32 {
+		writeError(w, http.StatusUnauthorized, "agent credential invalid")
+		return model.NodeCredential{}, false
+	}
+	var credential model.NodeCredential
+	if err := s.db.Where("secret_hash = ? AND status = ? AND revoked_at IS NULL", hashSecret(token), "ACTIVE").First(&credential).Error; err != nil {
+		writeError(w, http.StatusUnauthorized, "agent credential invalid")
+		return model.NodeCredential{}, false
+	}
+	return credential, true
 }
 
 func (s *Service) revokeNode(resolve UserResolver) http.HandlerFunc {
