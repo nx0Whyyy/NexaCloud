@@ -104,7 +104,13 @@ func register(ctx context.Context, cfg *config.Config, client *api.Client) error
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\nNexaAgent attend votre autorisation.\n\n  Code: %s\n  Ouvrez: %s/dashboard/infrastructure\n\n", authorization.UserCode, cfg.ControlPlaneURL)
+	fmt.Printf("\n============================================================\n")
+	fmt.Printf(" NEXAAGENT INSTALLE - ACTIVATION REQUISE\n")
+	fmt.Printf("\n CODE D'ACTIVATION : %s\n", authorization.UserCode)
+	fmt.Printf(" DASHBOARD         : %s/dashboard/infrastructure\n", cfg.ControlPlaneURL)
+	fmt.Printf(" EXPIRATION        : %d minutes\n", authorization.ExpiresIn/60)
+	fmt.Printf("============================================================\n\n")
+	fmt.Println("NexaAgent attend la validation du code...")
 	deadline := time.Now().Add(time.Duration(authorization.ExpiresIn) * time.Second)
 	for time.Now().Before(deadline) {
 		token, status, err := client.ClaimDevice(ctx, authorization.DeviceCode)
@@ -115,7 +121,7 @@ func register(ctx context.Context, cfg *config.Config, client *api.Client) error
 			if err := config.SaveState(cfg.StatePath, config.State{NodeID: token.NodeID, AgentToken: token.AgentToken, Fingerprint: token.Fingerprint}); err != nil {
 				return err
 			}
-			fmt.Printf("Node autorisé: %s\nConfiguration enregistrée dans %s\n", token.NodeID, cfg.StatePath)
+			fmt.Printf("\nNode active avec succes: %s\n", token.NodeID)
 			return nil
 		}
 		if err != nil && status != 202 {

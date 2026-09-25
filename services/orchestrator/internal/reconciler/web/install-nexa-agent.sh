@@ -19,11 +19,17 @@ case "$(uname -m)" in
   *) echo "Unsupported architecture: $(uname -m)" >&2; exit 3 ;;
 esac
 curl -fsSL "https://cloud.nexastudio.dev/downloads/nexa-agent-linux-$AGENT_ARCH" -o /usr/local/bin/nexa-agent
-echo "10a17dce4143df520ddb3df262a3e966a32d0dc8b5634de7ce2757ad49c18f22  /usr/local/bin/nexa-agent" | sha256sum -c -
+echo "78b45ab5171abbc387702fa4141f92514d88e5312ac8a1410ad319f1250d2d14  /usr/local/bin/nexa-agent" | sha256sum -c -
 chmod 0755 /usr/local/bin/nexa-agent
 install -d -m 0700 /var/lib/nexacloud
 
-NEXA_NODE_NAME="$NODE_NAME" NEXA_STATE_PATH=/var/lib/nexacloud/agent.json nexa-agent register
+printf '\nNexaAgent est installe. Generation du code d activation...\n\n'
+if ! NEXA_NODE_NAME="$NODE_NAME" NEXA_STATE_PATH=/var/lib/nexacloud/agent.json nexa-agent register; then
+  printf '\nActivation interrompue. Relancez cette commande pour generer un nouveau code.\n' >&2
+  exit 4
+fi
+
+printf '\nActivation confirmee. Demarrage du service NexaAgent...\n'
 cat >/etc/systemd/system/nexa-agent.service <<EOF
 [Unit]
 Description=NexaCloud node agent
@@ -46,4 +52,5 @@ EOF
 systemctl daemon-reload
 systemctl enable --now nexa-agent
 
-echo "NexaAgent installed and started."
+systemctl --no-pager --full status nexa-agent || true
+echo "NexaAgent installe, active et demarre."
