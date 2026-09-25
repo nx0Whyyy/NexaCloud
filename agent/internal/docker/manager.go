@@ -140,17 +140,17 @@ func (m *Manager) EnableSFTP(ctx context.Context, containerID string, port int, 
 		_, _ = docker(context.Background(), "rm", "-f", name)
 		return "", fmt.Errorf("initialisation SFTP: %w", err)
 	}
-	if _, err = docker(ctx, "exec", name, "mkdir", "-p", "/home/nexa/.ssh/keys"); err != nil {
+	if _, err = docker(ctx, "exec", name, "mkdir", "-p", "/home/nexa/.ssh"); err != nil {
 		_, _ = docker(context.Background(), "rm", "-f", name)
 		return "", fmt.Errorf("préparation de la clé SFTP: %w", err)
 	}
-	if _, err = docker(ctx, "cp", keyPath, name+":/home/nexa/.ssh/keys/authorized.pub"); err != nil {
+	if _, err = docker(ctx, "cp", keyPath, name+":/home/nexa/.ssh/authorized_keys"); err != nil {
 		_, _ = docker(context.Background(), "rm", "-f", name)
 		return "", fmt.Errorf("installation de la clé SFTP: %w", err)
 	}
-	if _, err = docker(ctx, "restart", name); err != nil {
+	if _, err = docker(ctx, "exec", name, "sh", "-c", "chown -R 1000:100 /home/nexa/.ssh && chmod 700 /home/nexa/.ssh && chmod 600 /home/nexa/.ssh/authorized_keys"); err != nil {
 		_, _ = docker(context.Background(), "rm", "-f", name)
-		return "", fmt.Errorf("activation SFTP: %w", err)
+		return "", fmt.Errorf("sécurisation de la clé SFTP: %w", err)
 	}
 	return fmt.Sprintf("SFTP ONLINE sur le port %d", port), nil
 }

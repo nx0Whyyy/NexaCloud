@@ -19,7 +19,7 @@ case "$(uname -m)" in
   *) echo "Unsupported architecture: $(uname -m)" >&2; exit 3 ;;
 esac
 curl -fsSL "https://cloud.nexastudio.dev/downloads/nexa-agent-linux-$AGENT_ARCH" -o /usr/local/bin/nexa-agent
-echo "7bebc879f590aa777cdc7eec4f159adc2b8df6de0dfab1db5ab594aa4802ee36  /usr/local/bin/nexa-agent" | sha256sum -c -
+echo "8721472b2faf248405ca83dcd4e0955884328f51e8e289d010eb86942d33b7f2  /usr/local/bin/nexa-agent" | sha256sum -c -
 chmod 0755 /usr/local/bin/nexa-agent
 install -d -m 0700 /var/lib/nexacloud
 
