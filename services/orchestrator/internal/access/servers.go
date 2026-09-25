@@ -253,8 +253,12 @@ func (s *Service) nextAgentCommand(w http.ResponseWriter, r *http.Request) {
 	var command model.AgentCommand
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		stale := model.Now().Add(-2 * time.Minute)
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("node_id = ? AND (status = ? OR (status = ? AND claimed_at < ?))", credential.NodeID, "PENDING", "RUNNING", stale).Order("created_at").First(&command).Error; err != nil {
-			return err
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("node_id = ? AND (status = ? OR (status = ? AND claimed_at < ?))", credential.NodeID, "PENDING", "RUNNING", stale).Order("created_at").Limit(1).Find(&command)
+		if query.Error != nil {
+			return query.Error
+		}
+		if query.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
 		}
 		now := model.Now()
 		command.Status = "RUNNING"
