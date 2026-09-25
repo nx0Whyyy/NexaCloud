@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/mail"
@@ -64,8 +65,16 @@ func (s *Service) EnsureAdmin(username, email, password string) error {
 	if username == "" || email == "" || password == "" {
 		return nil
 	}
+	var existing model.User
+	err := s.db.Where("LOWER(email) = ? OR LOWER(username) = ?", strings.ToLower(email), strings.ToLower(username)).First(&existing).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
 	var count int64
-	if err := s.db.Model(&model.User{}).Where("role = ?", "admin").Count(&count).Error; err != nil || count > 0 {
+	if err := s.db.Model(&model.User{}).Where("role IN ?", []string{"admin", "owner"}).Count(&count).Error; err != nil || count > 0 {
 		return err
 	}
 	hash, err := hashPassword(password)
