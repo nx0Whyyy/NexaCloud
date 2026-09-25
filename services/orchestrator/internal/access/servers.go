@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nexastudio/nexacloud/pkg/model"
@@ -70,7 +71,7 @@ func (s *Service) createServer(resolve UserResolver) http.HandlerFunc {
 			return
 		}
 		var used int64
-		s.db.Model(&model.Instance{}).Where("node_id = ? AND port = ? AND status NOT IN ?", node.ID, input.Port, []model.InstanceStatus{model.InstanceStopped, model.InstanceCrashed}).Count(&used)
+		s.db.Model(&model.Instance{}).Where("node_id = ? AND port = ?", node.ID, input.Port).Count(&used)
 		if used > 0 {
 			writeError(w, http.StatusConflict, "ce port est déjà utilisé sur le node")
 			return
@@ -251,7 +252,8 @@ func (s *Service) nextAgentCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	var command model.AgentCommand
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("node_id = ? AND status = ?", credential.NodeID, "PENDING").Order("created_at").First(&command).Error; err != nil {
+		stale := model.Now().Add(-2 * time.Minute)
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("node_id = ? AND (status = ? OR (status = ? AND claimed_at < ?))", credential.NodeID, "PENDING", "RUNNING", stale).Order("created_at").First(&command).Error; err != nil {
 			return err
 		}
 		now := model.Now()
@@ -316,6 +318,9 @@ func (s *Service) completeAgentCommand(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				updates["status"] = model.InstanceCrashed
+				if command.Command == "CREATE_SERVER" {
+					_ = s.ReleaseInstanceSlot(*command.InstanceID)
+				}
 			}
 		case "STOP_SERVER", "KILL_SERVER":
 			if input.Success {
@@ -324,8 +329,10 @@ func (s *Service) completeAgentCommand(w http.ResponseWriter, r *http.Request) {
 			}
 		case "DELETE_SERVER":
 			if input.Success {
-				updates["status"] = model.InstanceStopped
 				_ = s.ReleaseInstanceSlot(*command.InstanceID)
+				s.db.Delete(&model.Instance{}, "id = ?", *command.InstanceID)
+				w.WriteHeader(http.StatusNoContent)
+				return
 			}
 		}
 		s.db.Model(&model.Instance{}).Where("id = ?", *command.InstanceID).Updates(updates)
